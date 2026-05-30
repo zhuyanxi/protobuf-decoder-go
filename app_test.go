@@ -129,12 +129,16 @@ func TestDecodeReturnsStructuredContract(t *testing.T) {
 		t.Fatalf("expected LENDELIM typeName, got %q", result.Parts[0].TypeName)
 	}
 
-	if len(result.Parts[0].Value) != 1 {
-		t.Fatalf("expected one raw value variant, got %#v", result.Parts[0].Value)
+	if len(result.Parts[0].Value) != 2 {
+		t.Fatalf("expected string and bytes variants, got %#v", result.Parts[0].Value)
 	}
 
-	if result.Parts[0].Value[0].DisplayValue != "666f6f" {
-		t.Fatalf("expected payload raw hex %q, got %q", "666f6f", result.Parts[0].Value[0].DisplayValue)
+	if result.Parts[0].Value[0].CandidateType != "string.utf8" || result.Parts[0].Value[0].DisplayValue != "foo" {
+		t.Fatalf("expected UTF-8 string candidate foo, got %#v", result.Parts[0].Value[0])
+	}
+
+	if result.Parts[0].Value[1].CandidateType != "bytes.hex" || result.Parts[0].Value[1].DisplayValue != "666f6f" {
+		t.Fatalf("expected payload raw hex %q, got %#v", "666f6f", result.Parts[0].Value[1])
 	}
 
 	if result.Error != "" {

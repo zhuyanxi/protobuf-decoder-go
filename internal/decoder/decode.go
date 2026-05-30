@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"strconv"
 )
 
 const (
@@ -125,12 +124,7 @@ func decodePart(reader *BufferReader, index int) (Part, int, error) {
 		part.TypeName = "VARINT"
 		part.ByteRange = [2]int{tagStart, reader.Position()}
 		part.RawHex = hex.EncodeToString(reader.data[tagStart:reader.Position()])
-		part.Value = []ValueVariant{{
-			CandidateType: "varint.raw",
-			DisplayValue:  strconv.FormatUint(value, 10),
-			Description:   "Raw protobuf varint value.",
-			Confidence:    "raw",
-		}}
+		part.Value = buildVarintVariants(value)
 		return part, 0, nil
 	case 1:
 		value, _, _, readErr := reader.ReadFixed64()
@@ -140,12 +134,7 @@ func decodePart(reader *BufferReader, index int) (Part, int, error) {
 		part.TypeName = "FIXED64"
 		part.ByteRange = [2]int{tagStart, reader.Position()}
 		part.RawHex = hex.EncodeToString(reader.data[tagStart:reader.Position()])
-		part.Value = []ValueVariant{{
-			CandidateType: "fixed64.raw",
-			DisplayValue:  strconv.FormatUint(value, 10),
-			Description:   "Raw little-endian 64-bit value.",
-			Confidence:    "raw",
-		}}
+		part.Value = buildFixed64Variants(value)
 		return part, 0, nil
 	case 2:
 		lengthValue, _, _, readErr := reader.ReadVarint()
@@ -166,12 +155,7 @@ func decodePart(reader *BufferReader, index int) (Part, int, error) {
 		part.TypeName = "LENDELIM"
 		part.ByteRange = [2]int{tagStart, reader.Position()}
 		part.RawHex = hex.EncodeToString(reader.data[tagStart:reader.Position()])
-		part.Value = []ValueVariant{{
-			CandidateType: "bytes.hex",
-			DisplayValue:  hex.EncodeToString(payload),
-			Description:   fmt.Sprintf("Length-delimited payload (%d bytes).", len(payload)),
-			Confidence:    "raw",
-		}}
+		part.Value = buildLengthDelimitedVariants(payload)
 		return part, 0, nil
 	case 5:
 		value, _, _, readErr := reader.ReadFixed32()
@@ -181,12 +165,7 @@ func decodePart(reader *BufferReader, index int) (Part, int, error) {
 		part.TypeName = "FIXED32"
 		part.ByteRange = [2]int{tagStart, reader.Position()}
 		part.RawHex = hex.EncodeToString(reader.data[tagStart:reader.Position()])
-		part.Value = []ValueVariant{{
-			CandidateType: "fixed32.raw",
-			DisplayValue:  strconv.FormatUint(uint64(value), 10),
-			Description:   "Raw little-endian 32-bit value.",
-			Confidence:    "raw",
-		}}
+		part.Value = buildFixed32Variants(value)
 		return part, 0, nil
 	default:
 		return Part{}, tagStart, &ParseError{
