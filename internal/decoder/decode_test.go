@@ -184,3 +184,67 @@ func TestDecodeBytesHonorsMaxDepthForNestedPayload(t *testing.T) {
 		t.Fatalf("expected maxDepth warning, got %#v", result.Warnings)
 	}
 }
+
+func TestDecodeBytesSkipsValidGRPCHeader(t *testing.T) {
+	data := []byte{0x00, 0x00, 0x00, 0x00, 0x02, 0x08, 0x01}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32})
+
+	if result.Error != "" {
+		t.Fatalf("expected no error, got %q", result.Error)
+	}
+
+	if len(result.Parts) != 2 {
+		t.Fatalf("expected header part plus body field, got %#v", result.Parts)
+	}
+
+	if result.Parts[0].TypeName != "GRPC_HEADER" || result.Parts[0].RawHex != "0000000002" {
+		t.Fatalf("unexpected grpc header part %#v", result.Parts[0])
+	}
+
+	if result.Parts[1].TypeName != "VARINT" || result.Parts[1].ByteRange != [2]int{5, 7} {
+		t.Fatalf("expected body field byte range shifted past header, got %#v", result.Parts[1])
+	}
+
+	if len(result.Warnings) == 0 || !strings.Contains(strings.Join(result.Warnings, " | "), "Detected gRPC message header") {
+		t.Fatalf("expected grpc detection warning, got %#v", result.Warnings)
+	}
+}
+
+func TestDecodeBytesDoesNotSkipInvalidGRPCHeaderLength(t *testing.T) {
+	data := []byte{0x00, 0x00, 0x00, 0x00, 0x01, 0x08, 0x01}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32})
+
+	if !strings.Contains(result.Error, string(ErrInvalidFieldNumber)) {
+		t.Fatalf("expected normal protobuf parse failure, got %q", result.Error)
+	}
+
+	if len(result.Parts) != 0 {
+		t.Fatalf("expected no parsed parts when header not skipped, got %#v", result.Parts)
+	}
+}
+
+func TestDecodeBytesRejectsTruncatedGRPCPayload(t *testing.T) {
+	data := []byte{0x00, 0x00, 0x00, 0x00, 0x03, 0x08, 0x01}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32})
+
+	if !strings.Contains(result.Error, string(ErrTruncatedGRPCMessage)) {
+		t.Fatalf("expected truncated grpc error, got %q", result.Error)
+	}
+
+	if result.Leftover != "00000000030801" {
+		t.Fatalf("expected full leftover on grpc truncation, got %q", result.Leftover)
+	}
+}
+
+func TestDecodeBytesRejectsCompressedGRPCPayload(t *testing.T) {
+	data := []byte{0x01, 0x00, 0x00, 0x00, 0x02, 0x78, 0x9c}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32})
+
+	if !strings.Contains(result.Error, string(ErrUnsupportedGRPCCompression)) {
+		t.Fatalf("expected unsupported grpc compression error, got %q", result.Error)
+	}
+
+	if result.Leftover != "0100000002789c" {
+		t.Fatalf("expected full leftover on compressed grpc payload, got %q", result.Leftover)
+	}
+}

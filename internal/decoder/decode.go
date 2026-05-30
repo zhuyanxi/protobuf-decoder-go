@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -17,6 +18,8 @@ const (
 	ErrInvalidFieldNumber  ErrorKind = "invalid_field_number"
 	ErrMaxFieldsExceeded   ErrorKind = "max_fields_exceeded"
 	ErrMaxBytesExceeded    ErrorKind = "max_bytes_exceeded"
+	ErrTruncatedGRPCMessage ErrorKind = "truncated_grpc_message"
+	ErrUnsupportedGRPCCompression ErrorKind = "unsupported_grpc_compression"
 )
 
 type DecodeOptions struct {
@@ -54,21 +57,37 @@ type ValueVariant struct {
 
 func DecodeBytes(data []byte, options DecodeOptions) DecodeResult {
 	resolved := normalizeOptions(options)
-	return decodeBytesAtDepth(data, resolved, 0)
+	return decodeBytesAtDepth(data, resolved, 0, 0, true)
 }
 
-func decodeBytesAtDepth(data []byte, options DecodeOptions, depth int) DecodeResult {
+func decodeBytesAtDepth(data []byte, options DecodeOptions, depth int, baseOffset int, detectGRPC bool) DecodeResult {
 	resolved := normalizeOptions(options)
 	result := DecodeResult{InputSize: len(data)}
 
 	if len(data) > resolved.MaxBytes {
 		result.Leftover = hex.EncodeToString(data)
 		result.Error = (&ParseError{
-			Offset:  0,
+			Offset:  baseOffset,
 			Kind:    ErrMaxBytesExceeded,
 			Message: fmt.Sprintf("input size %d exceeds maxBytes %d", len(data), resolved.MaxBytes),
 		}).Error()
 		return result
+	}
+
+	if detectGRPC {
+		header, matched, grpcErr := detectGRPCHeader(data)
+		if grpcErr != nil {
+			result.Leftover = hex.EncodeToString(data)
+			result.Error = grpcErr.Error()
+			return result
+		}
+		if matched {
+			bodyResult := decodeBytesAtDepth(data[5:], resolved, depth, baseOffset+5, false)
+			bodyResult.Parts = append([]Part{buildGRPCHeaderPart(header)}, bodyResult.Parts...)
+			bodyResult.InputSize = len(data)
+			bodyResult.Warnings = append([]string{fmt.Sprintf("Detected gRPC message header: skipped 5 bytes, message length %d.", header.MessageLength)}, bodyResult.Warnings...)
+			return bodyResult
+		}
 	}
 
 	reader := NewBufferReader(data)
@@ -78,14 +97,14 @@ func decodeBytesAtDepth(data []byte, options DecodeOptions, depth int) DecodeRes
 		if fieldIndex >= resolved.MaxFields {
 			result.Leftover = hex.EncodeToString(data[reader.Position():])
 			result.Error = (&ParseError{
-				Offset:  reader.Position(),
+				Offset:  baseOffset + reader.Position(),
 				Kind:    ErrMaxFieldsExceeded,
 				Message: fmt.Sprintf("decoded fields exceeded maxFields %d", resolved.MaxFields),
 			}).Error()
 			return result
 		}
 
-		part, warnings, errOffset, err := decodePart(reader, fieldIndex+1, resolved, depth)
+		part, warnings, errOffset, err := decodePart(reader, fieldIndex+1, resolved, depth, baseOffset)
 		if len(warnings) > 0 {
 			result.Warnings = append(result.Warnings, warnings...)
 		}
@@ -102,7 +121,7 @@ func decodeBytesAtDepth(data []byte, options DecodeOptions, depth int) DecodeRes
 	return result
 }
 
-func decodePart(reader *BufferReader, index int, options DecodeOptions, depth int) (Part, []string, int, error) {
+func decodePart(reader *BufferReader, index int, options DecodeOptions, depth int, baseOffset int) (Part, []string, int, error) {
 	tag, tagStart, _, err := reader.ReadVarint()
 	if err != nil {
 		return Part{}, nil, tagStart, err
@@ -112,7 +131,7 @@ func decodePart(reader *BufferReader, index int, options DecodeOptions, depth in
 	wireType := int(tag & 0x7)
 	if fieldNumber <= 0 {
 		return Part{}, nil, tagStart, &ParseError{
-			Offset:  tagStart,
+			Offset:  baseOffset + tagStart,
 			Kind:    ErrInvalidFieldNumber,
 			Message: fmt.Sprintf("field number %d is invalid", fieldNumber),
 		}
@@ -131,7 +150,7 @@ func decodePart(reader *BufferReader, index int, options DecodeOptions, depth in
 			return Part{}, nil, tagStart, readErr
 		}
 		part.TypeName = "VARINT"
-		part.ByteRange = [2]int{tagStart, reader.Position()}
+		part.ByteRange = [2]int{baseOffset + tagStart, baseOffset + reader.Position()}
 		part.RawHex = hex.EncodeToString(reader.data[tagStart:reader.Position()])
 		part.Value = buildVarintVariants(value)
 		return part, nil, 0, nil
@@ -141,7 +160,7 @@ func decodePart(reader *BufferReader, index int, options DecodeOptions, depth in
 			return Part{}, nil, tagStart, readErr
 		}
 		part.TypeName = "FIXED64"
-		part.ByteRange = [2]int{tagStart, reader.Position()}
+		part.ByteRange = [2]int{baseOffset + tagStart, baseOffset + reader.Position()}
 		part.RawHex = hex.EncodeToString(reader.data[tagStart:reader.Position()])
 		part.Value = buildFixed64Variants(value)
 		return part, nil, 0, nil
@@ -152,7 +171,7 @@ func decodePart(reader *BufferReader, index int, options DecodeOptions, depth in
 		}
 		if lengthValue > math.MaxInt {
 			return Part{}, nil, tagStart, &ParseError{
-				Offset:  tagStart,
+				Offset:  baseOffset + tagStart,
 				Kind:    ErrInvalidLength,
 				Message: fmt.Sprintf("length-delimited payload length %d exceeds platform int", lengthValue),
 			}
@@ -162,7 +181,7 @@ func decodePart(reader *BufferReader, index int, options DecodeOptions, depth in
 			return Part{}, nil, tagStart, bytesErr
 		}
 		part.TypeName = "LENDELIM"
-		part.ByteRange = [2]int{tagStart, reader.Position()}
+		part.ByteRange = [2]int{baseOffset + tagStart, baseOffset + reader.Position()}
 		part.RawHex = hex.EncodeToString(reader.data[tagStart:reader.Position()])
 		part.Value = buildLengthDelimitedVariants(payload)
 
@@ -171,7 +190,7 @@ func decodePart(reader *BufferReader, index int, options DecodeOptions, depth in
 			if depth >= options.MaxDepth {
 				warnings = append(warnings, fmt.Sprintf("Nested decode skipped for field %d: maxDepth %d reached.", fieldNumber, options.MaxDepth))
 			} else {
-				nested := decodeBytesAtDepth(payload, options, depth+1)
+				nested := decodeBytesAtDepth(payload, options, depth+1, 0, false)
 				if nested.Error == "" && nested.Leftover == "" && len(nested.Parts) > 0 {
 					part.Children = nested.Parts
 					part.Value = append([]ValueVariant{nestedMessageVariant(len(nested.Parts))}, part.Value...)
@@ -190,13 +209,13 @@ func decodePart(reader *BufferReader, index int, options DecodeOptions, depth in
 			return Part{}, nil, tagStart, readErr
 		}
 		part.TypeName = "FIXED32"
-		part.ByteRange = [2]int{tagStart, reader.Position()}
+		part.ByteRange = [2]int{baseOffset + tagStart, baseOffset + reader.Position()}
 		part.RawHex = hex.EncodeToString(reader.data[tagStart:reader.Position()])
 		part.Value = buildFixed32Variants(value)
 		return part, nil, 0, nil
 	default:
 		return Part{}, nil, tagStart, &ParseError{
-			Offset:  tagStart,
+			Offset:  baseOffset + tagStart,
 			Kind:    ErrUnsupportedWireType,
 			Message: fmt.Sprintf("wire type %d is unsupported", wireType),
 		}
@@ -225,4 +244,84 @@ func nestedFailureReason(result DecodeResult) string {
 		return fmt.Sprintf("leftover bytes %s", result.Leftover)
 	}
 	return "payload did not fully parse as nested protobuf"
+}
+
+type grpcHeaderInfo struct {
+	Compressed   bool
+	MessageLength int
+	RawHex       string
+}
+
+func detectGRPCHeader(data []byte) (grpcHeaderInfo, bool, error) {
+	if len(data) < 5 {
+		return grpcHeaderInfo{}, false, nil
+	}
+
+	flag := data[0]
+	if flag != 0 && flag != 1 {
+		return grpcHeaderInfo{}, false, nil
+	}
+
+	messageLength := uint64(binary.BigEndian.Uint32(data[1:5]))
+	remaining := uint64(len(data) - 5)
+	header := grpcHeaderInfo{
+		Compressed:   flag != 0,
+		MessageLength: int(messageLength),
+		RawHex:       hex.EncodeToString(data[:5]),
+	}
+
+	if messageLength > uint64(math.MaxInt) {
+		return grpcHeaderInfo{}, false, &ParseError{
+			Offset:  0,
+			Kind:    ErrInvalidLength,
+			Message: fmt.Sprintf("gRPC frame length %d exceeds platform int", messageLength),
+		}
+	}
+
+	if messageLength > remaining {
+		return grpcHeaderInfo{}, false, &ParseError{
+			Offset:  0,
+			Kind:    ErrTruncatedGRPCMessage,
+			Message: fmt.Sprintf("gRPC frame length %d exceeds remaining payload %d", messageLength, remaining),
+		}
+	}
+
+	if messageLength != remaining {
+		return grpcHeaderInfo{}, false, nil
+	}
+
+	if header.Compressed {
+		return grpcHeaderInfo{}, false, &ParseError{
+			Offset:  0,
+			Kind:    ErrUnsupportedGRPCCompression,
+			Message: "gRPC compressed messages are not supported",
+		}
+	}
+
+	return header, true, nil
+}
+
+func buildGRPCHeaderPart(header grpcHeaderInfo) Part {
+	return Part{
+		ByteRange:   [2]int{0, 5},
+		Index:       0,
+		FieldNumber: 0,
+		WireType:    -1,
+		TypeName:    "GRPC_HEADER",
+		RawHex:      header.RawHex,
+		Value: []ValueVariant{
+			{
+				CandidateType: "grpc.compressed",
+				DisplayValue:  fmt.Sprintf("%t", header.Compressed),
+				Description:   "gRPC frame compression flag.",
+				Confidence:    "confirmed",
+			},
+			{
+				CandidateType: "grpc.message_length",
+				DisplayValue:  fmt.Sprintf("%d", header.MessageLength),
+				Description:   "gRPC frame message length in bytes.",
+				Confidence:    "confirmed",
+			},
+		},
+	}
 }
