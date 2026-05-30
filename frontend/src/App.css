@@ -2,18 +2,25 @@
     min-height: 100vh;
     padding: 32px;
     color: #1f2937;
+    transition: box-shadow 160ms ease, background 160ms ease;
+}
+
+.app-shell--drag-active {
+    box-shadow: inset 0 0 0 4px rgba(194, 65, 12, 0.18);
 }
 
 .hero-card,
 .panel,
-.status-card {
+.status-card,
+.dropzone-card,
+.state-card {
     border: 1px solid rgba(148, 163, 184, 0.35);
-    background: rgba(255, 252, 246, 0.9);
+    background: rgba(255, 252, 246, 0.92);
     box-shadow: 0 18px 50px rgba(148, 163, 184, 0.18);
 }
 
 .hero-card {
-    max-width: 920px;
+    max-width: 1080px;
     margin: 0 auto 24px;
     padding: 28px;
     border-radius: 24px;
@@ -42,11 +49,28 @@
     line-height: 1.6;
 }
 
+.hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.hero-chip {
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255, 247, 237, 0.95);
+    border: 1px solid #fdba74;
+    color: #9a3412;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
 .workspace-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
     gap: 20px;
-    max-width: 920px;
+    max-width: 1080px;
     margin: 0 auto;
 }
 
@@ -58,19 +82,26 @@
 
 .panel-header,
 .controls-row,
-.action-row {
+.action-row,
+.header-actions {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 16px;
 }
 
 .panel-header {
+    justify-content: space-between;
     margin-bottom: 20px;
+}
+
+.header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .field-label,
 .select-field span,
+.number-field span,
 .status-label {
     display: block;
     margin-bottom: 8px;
@@ -81,6 +112,7 @@
 
 .payload-input,
 .select-field select,
+.number-field input,
 .primary-button,
 .secondary-button,
 .ghost-button {
@@ -88,7 +120,8 @@
 }
 
 .payload-input,
-.select-field select {
+.select-field select,
+.number-field input {
     width: 100%;
     border: 1px solid #cbd5e1;
     border-radius: 16px;
@@ -97,7 +130,7 @@
 }
 
 .payload-input {
-    min-height: 180px;
+    min-height: 196px;
     resize: vertical;
     padding: 14px 16px;
     line-height: 1.6;
@@ -106,13 +139,15 @@
 .controls-row {
     margin-top: 18px;
     align-items: end;
+    justify-content: space-between;
 }
 
 .select-field {
     flex: 1;
 }
 
-.select-field select {
+.select-field select,
+.number-field input {
     padding: 12px 14px;
 }
 
@@ -124,6 +159,36 @@
     color: #334155;
     font-weight: 600;
     white-space: nowrap;
+}
+
+.limits-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 18px;
+}
+
+.dropzone-card {
+    margin-top: 18px;
+    padding: 16px;
+    border-radius: 18px;
+    border-style: dashed;
+}
+
+.dropzone-title,
+.dropzone-copy {
+    margin: 0;
+}
+
+.dropzone-title {
+    color: #9a3412;
+    font-weight: 700;
+}
+
+.dropzone-copy {
+    margin-top: 8px;
+    color: #475569;
+    line-height: 1.5;
 }
 
 .action-row {
@@ -178,8 +243,15 @@
     transform: none;
 }
 
-.status-card {
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
     margin-top: 20px;
+}
+
+.status-card,
+.state-card {
     padding: 16px;
     border-radius: 18px;
 }
@@ -188,7 +260,7 @@
     display: block;
     color: #0f172a;
     line-height: 1.5;
-    word-break: break-all;
+    word-break: break-word;
 }
 
 .error-banner {
@@ -200,8 +272,29 @@
     font-weight: 600;
 }
 
+.state-card {
+    color: #475569;
+    line-height: 1.6;
+}
+
+.result-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.result-summary span {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.06);
+    color: #334155;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
 .result-block {
-    min-height: 360px;
+    min-height: 420px;
     margin: 0;
     padding: 16px;
     border-radius: 18px;
@@ -220,8 +313,18 @@
         grid-template-columns: 1fr;
     }
 
-    .controls-row {
+    .controls-row,
+    .panel-header {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .header-actions {
+        justify-content: flex-start;
+    }
+
+    .limits-grid,
+    .status-grid {
+        grid-template-columns: 1fr;
     }
 }
