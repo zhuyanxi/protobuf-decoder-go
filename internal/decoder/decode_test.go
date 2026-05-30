@@ -248,3 +248,75 @@ func TestDecodeBytesRejectsCompressedGRPCPayload(t *testing.T) {
 		t.Fatalf("expected full leftover on compressed grpc payload, got %q", result.Leftover)
 	}
 }
+
+func TestDecodeBytesParsesDelimitedMessageStream(t *testing.T) {
+	data := []byte{0x02, 0x08, 0x01, 0x02, 0x10, 0x02}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32, ParseDelimited: true})
+
+	if result.Error != "" {
+		t.Fatalf("expected no error, got %q", result.Error)
+	}
+
+	if len(result.Parts) != 4 {
+		t.Fatalf("expected two delimiters and two fields, got %#v", result.Parts)
+	}
+
+	if result.Parts[0].TypeName != "MessageDelimiter" || result.Parts[0].ByteRange != [2]int{0, 1} {
+		t.Fatalf("unexpected first delimiter %#v", result.Parts[0])
+	}
+
+	if result.Parts[1].TypeName != "VARINT" || result.Parts[1].ByteRange != [2]int{1, 3} {
+		t.Fatalf("unexpected first message field %#v", result.Parts[1])
+	}
+
+	if result.Parts[2].TypeName != "MessageDelimiter" || result.Parts[2].ByteRange != [2]int{3, 4} {
+		t.Fatalf("unexpected second delimiter %#v", result.Parts[2])
+	}
+
+	if result.Parts[3].TypeName != "VARINT" || result.Parts[3].ByteRange != [2]int{4, 6} {
+		t.Fatalf("unexpected second message field %#v", result.Parts[3])
+	}
+}
+
+func TestDecodeBytesRejectsTruncatedDelimitedMessage(t *testing.T) {
+	data := []byte{0x03, 0x08, 0x01}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32, ParseDelimited: true})
+
+	if !strings.Contains(result.Error, string(ErrTruncatedDelimitedMessage)) {
+		t.Fatalf("expected truncated delimited message error, got %q", result.Error)
+	}
+
+	if result.Leftover != "030801" {
+		t.Fatalf("expected full leftover on truncated delimited message, got %q", result.Leftover)
+	}
+}
+
+func TestDecodeBytesReturnsRemainingStreamAfterDelimitedMessageError(t *testing.T) {
+	data := []byte{0x02, 0x08, 0x01, 0x02, 0x1a, 0x03, 0x02, 0x10, 0x02}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32, ParseDelimited: true})
+
+	if len(result.Parts) != 3 {
+		t.Fatalf("expected first delimiter, first field, second delimiter before error, got %#v", result.Parts)
+	}
+
+	if !strings.Contains(result.Error, string(ErrUnexpectedEOF)) {
+		t.Fatalf("expected internal message parse error, got %q", result.Error)
+	}
+
+	if result.Leftover != "1a03021002" {
+		t.Fatalf("expected leftover from broken message through end of stream, got %q", result.Leftover)
+	}
+}
+
+func TestDecodeBytesRejectsDelimitedLengthVarintOverflow(t *testing.T) {
+	data := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32, ParseDelimited: true})
+
+	if !strings.Contains(result.Error, string(ErrVarintOverflow)) {
+		t.Fatalf("expected varint overflow on delimiter, got %q", result.Error)
+	}
+
+	if result.Leftover != "8080808080808080808002" {
+		t.Fatalf("expected full leftover on delimiter overflow, got %q", result.Leftover)
+	}
+}

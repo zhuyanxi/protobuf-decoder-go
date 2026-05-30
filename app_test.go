@@ -102,7 +102,7 @@ func TestDecodeResultJSONContract(t *testing.T) {
 func TestDecodeReturnsStructuredContract(t *testing.T) {
 	app := NewApp()
 	result, err := app.Decode(DecodeRequest{
-		Input:          "0a03666f6f",
+		Input:          "050a03666f6f",
 		InputEncoding:  "hex",
 		ParseDelimited: true,
 		MaxDepth:       7,
@@ -113,32 +113,36 @@ func TestDecodeReturnsStructuredContract(t *testing.T) {
 		t.Fatalf("decode returned unexpected error: %v", err)
 	}
 
-	if result.InputSize != 5 {
-		t.Fatalf("expected inputSize %d, got %d", 5, result.InputSize)
+	if result.InputSize != 6 {
+		t.Fatalf("expected inputSize %d, got %d", 6, result.InputSize)
 	}
 
-	if len(result.Parts) != 1 {
-		t.Fatalf("expected one decoded part, got %d", len(result.Parts))
+	if len(result.Parts) != 2 {
+		t.Fatalf("expected delimiter and one decoded part, got %d", len(result.Parts))
 	}
 
-	if result.Parts[0].FieldNumber != 1 {
-		t.Fatalf("expected fieldNumber 1, got %d", result.Parts[0].FieldNumber)
+	if result.Parts[0].TypeName != "MessageDelimiter" {
+		t.Fatalf("expected MessageDelimiter part, got %q", result.Parts[0].TypeName)
 	}
 
-	if result.Parts[0].TypeName != "LENDELIM" {
-		t.Fatalf("expected LENDELIM typeName, got %q", result.Parts[0].TypeName)
+	if result.Parts[1].FieldNumber != 1 {
+		t.Fatalf("expected fieldNumber 1, got %d", result.Parts[1].FieldNumber)
 	}
 
-	if len(result.Parts[0].Value) != 2 {
-		t.Fatalf("expected string and bytes variants, got %#v", result.Parts[0].Value)
+	if result.Parts[1].TypeName != "LENDELIM" {
+		t.Fatalf("expected LENDELIM typeName, got %q", result.Parts[1].TypeName)
 	}
 
-	if result.Parts[0].Value[0].CandidateType != "string.utf8" || result.Parts[0].Value[0].DisplayValue != "foo" {
-		t.Fatalf("expected UTF-8 string candidate foo, got %#v", result.Parts[0].Value[0])
+	if len(result.Parts[1].Value) != 2 {
+		t.Fatalf("expected string and bytes variants, got %#v", result.Parts[1].Value)
 	}
 
-	if result.Parts[0].Value[1].CandidateType != "bytes.hex" || result.Parts[0].Value[1].DisplayValue != "666f6f" {
-		t.Fatalf("expected payload raw hex %q, got %#v", "666f6f", result.Parts[0].Value[1])
+	if result.Parts[1].Value[0].CandidateType != "string.utf8" || result.Parts[1].Value[0].DisplayValue != "foo" {
+		t.Fatalf("expected UTF-8 string candidate foo, got %#v", result.Parts[1].Value[0])
+	}
+
+	if result.Parts[1].Value[1].CandidateType != "bytes.hex" || result.Parts[1].Value[1].DisplayValue != "666f6f" {
+		t.Fatalf("expected payload raw hex %q, got %#v", "666f6f", result.Parts[1].Value[1])
 	}
 
 	if result.Error != "" {
@@ -149,8 +153,8 @@ func TestDecodeReturnsStructuredContract(t *testing.T) {
 		t.Fatalf("expected two request warnings, got %#v", result.Warnings)
 	}
 
-	if result.Parts[0].RawHex != "0a03666f6f" {
-		t.Fatalf("expected normalized rawHex %q, got %q", "0a03666f6f", result.Parts[0].RawHex)
+	if result.Parts[1].RawHex != "0a03666f6f" {
+		t.Fatalf("expected normalized rawHex %q, got %q", "0a03666f6f", result.Parts[1].RawHex)
 	}
 }
 
