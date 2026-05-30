@@ -1,6 +1,6 @@
 import {ChangeEvent, DragEvent, KeyboardEvent, useState} from 'react';
 import './App.css';
-import {Decode, DecodeFile, OpenInputFile} from '../wailsjs/go/main/App';
+import {CopyResultJSON, Decode, DecodeFile, ExportResult, OpenInputFile} from '../wailsjs/go/main/App';
 import {main} from '../wailsjs/go/models';
 
 type DecodeRequest = main.DecodeRequest;
@@ -8,6 +8,7 @@ type DecodeOptions = main.DecodeOptions;
 type DecodeResult = main.DecodeResult;
 type OpenFileResult = main.OpenFileResult;
 type Part = main.Part;
+type SaveFileResult = main.SaveFileResult;
 type ValueVariant = main.ValueVariant;
 type DroppedFile = File & {path?: string};
 
@@ -133,6 +134,10 @@ function formatOffset(value: number): string {
     return value.toString(16).padStart(4, '0');
 }
 
+function exportLabel(format: 'json' | 'text'): string {
+    return format === 'text' ? 'text report' : 'JSON';
+}
+
 const defaultDecodeRequest: DecodeRequest = {
     input: sampleInput,
     inputEncoding: 'auto',
@@ -245,6 +250,53 @@ function App() {
             }
 
             await decodeFileAtPath(dialogResult.path, 'File');
+        } finally {
+            setIsBusy(false);
+        }
+    }
+
+    async function handleCopyJSON() {
+        if (!result) {
+            return;
+        }
+
+        setIsBusy(true);
+        setErrorMessage('');
+        setStatusMessage('Copying pretty JSON to clipboard...');
+
+        try {
+            await CopyResultJSON(result);
+            setStatusMessage('Copied pretty JSON to clipboard.');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setErrorMessage(message);
+            setStatusMessage('Copy JSON failed.');
+        } finally {
+            setIsBusy(false);
+        }
+    }
+
+    async function handleExport(format: 'json' | 'text') {
+        if (!result) {
+            return;
+        }
+
+        setIsBusy(true);
+        setErrorMessage('');
+        setStatusMessage(`Waiting for ${exportLabel(format)} export path...`);
+
+        try {
+            const exportResult: SaveFileResult = await ExportResult(result, format);
+            if (exportResult.cancelled) {
+                setStatusMessage(`${exportLabel(format)} export cancelled.`);
+                return;
+            }
+
+            setStatusMessage(`Saved ${exportLabel(format)} export to ${exportResult.path}.`);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setErrorMessage(message);
+            setStatusMessage(`${exportLabel(format)} export failed.`);
         } finally {
             setIsBusy(false);
         }
@@ -364,10 +416,10 @@ function App() {
             onDrop={handleDrop}
         >
             <section className="hero-card">
-                <p className="eyebrow">Story 11 / decode workspace</p>
+                <p className="eyebrow">Story 13 / export workspace</p>
                 <h1>Protobuf Decoder Desktop</h1>
                 <p className="intro">
-                    Paste hex or base64, choose file, or drop file on window. Tune decode limits before each request, then inspect raw JSON contract from Wails backend.
+                    Paste hex or base64, choose file, or drop file on window. Tune decode limits, inspect structured result, then copy or export analysis without leaving desktop app.
                 </p>
                 <div className="hero-meta">
                     <span className="hero-chip">Local only</span>
@@ -466,6 +518,17 @@ function App() {
                 <article className="panel">
                     <div className="panel-header">
                         <h2>Decode Result</h2>
+                        <div className="header-actions">
+                            <button className="ghost-button" onClick={handleCopyJSON} type="button" disabled={isBusy || !result}>
+                                Copy JSON
+                            </button>
+                            <button className="ghost-button" onClick={() => handleExport('json')} type="button" disabled={isBusy || !result}>
+                                Export JSON
+                            </button>
+                            <button className="ghost-button" onClick={() => handleExport('text')} type="button" disabled={isBusy || !result}>
+                                Export text
+                            </button>
+                        </div>
                     </div>
 
                     {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}

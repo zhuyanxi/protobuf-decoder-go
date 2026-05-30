@@ -207,3 +207,97 @@ func TestDecodeFileRejectsMissingFile(t *testing.T) {
 		t.Fatal("expected missing file error")
 	}
 }
+
+func TestBuildExportPayloadJSONPrettyPrints(t *testing.T) {
+	payload, err := buildExportPayload(DecodeResult{
+		Parts: []Part{{
+			FieldNumber: 1,
+			TypeName:    "VARINT",
+			RawHex:      "0801",
+			Value: []ValueVariant{{
+				CandidateType: "int64",
+				DisplayValue:  "9223372036854775807",
+			}},
+		}},
+		Warnings: []string{"candidate only"},
+	}, "json")
+	if err != nil {
+		t.Fatalf("build json export payload: %v", err)
+	}
+
+	if !strings.Contains(payload, "\n  \"parts\": [") {
+		t.Fatalf("expected pretty JSON payload, got %q", payload)
+	}
+
+	if !strings.Contains(payload, "9223372036854775807") {
+		t.Fatalf("expected large integer to remain string in payload, got %q", payload)
+	}
+}
+
+func TestBuildExportPayloadTextIncludesNestedFields(t *testing.T) {
+	payload, err := buildExportPayload(DecodeResult{
+		Parts: []Part{{
+			ByteRange:   [2]int{0, 5},
+			FieldNumber: 1,
+			WireType:    2,
+			TypeName:    "LENDELIM",
+			RawHex:      "0a03666f6f",
+			Value: []ValueVariant{{
+				CandidateType: "string.utf8",
+				DisplayValue:  "foo",
+				Confidence:    "high",
+			}},
+			Children: []Part{{
+				ByteRange:   [2]int{0, 2},
+				FieldNumber: 2,
+				WireType:    0,
+				TypeName:    "VARINT",
+				RawHex:      "1001",
+				Value: []ValueVariant{{
+					CandidateType: "uint64",
+					DisplayValue:  "1",
+				}},
+			}},
+		}},
+		Leftover:  "ff",
+		Error:     "truncated payload",
+		Warnings:  []string{"candidate only"},
+		InputSize: 6,
+	}, "text")
+	if err != nil {
+		t.Fatalf("build text export payload: %v", err)
+	}
+
+	for _, fragment := range []string{
+		"Input size: 6 bytes",
+		"Warnings:",
+		"Error: truncated payload",
+		"Leftover: ff",
+		"- #1 LENDELIM wire=2 range=[0, 5) raw=0a03666f6f",
+		"* string.utf8: foo [high]",
+		"  - #2 VARINT wire=0 range=[0, 2) raw=1001",
+	} {
+		if !strings.Contains(payload, fragment) {
+			t.Fatalf("expected fragment %q in text payload %q", fragment, payload)
+		}
+	}
+}
+
+func TestExportResultRejectsUnsupportedFormat(t *testing.T) {
+	app := NewApp()
+	_, err := app.ExportResult(DecodeResult{}, "xml")
+	if err == nil {
+		t.Fatal("expected unsupported export format error")
+	}
+
+	if !strings.Contains(err.Error(), "application context is not ready") {
+		t.Fatalf("expected context error before dialog when app not started, got %v", err)
+	}
+}
+
+func TestNormalizeExportFormatRejectsUnknownValue(t *testing.T) {
+	_, err := normalizeExportFormat("xml")
+	if err == nil {
+		t.Fatal("expected unsupported export format error")
+	}
+}

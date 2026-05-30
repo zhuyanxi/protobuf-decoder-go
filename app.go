@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -75,6 +77,12 @@ type ValueVariant struct {
 type OpenFileResult struct {
 	Path      string `json:"path"`
 	Cancelled bool   `json:"cancelled"`
+}
+
+type SaveFileResult struct {
+	Path      string `json:"path"`
+	Cancelled bool   `json:"cancelled"`
+	Format    string `json:"format"`
 }
 
 func (r DecodeRequest) Options() DecodeOptions {
@@ -236,4 +244,156 @@ func (a *App) OpenInputFile() (OpenFileResult, error) {
 	}
 
 	return OpenFileResult{Path: selectedPath, Cancelled: false}, nil
+}
+
+func (a *App) CopyResultJSON(result DecodeResult) error {
+	if a.ctx == nil {
+		return errors.New("application context is not ready")
+	}
+
+	payload, err := buildExportPayload(result, "json")
+	if err != nil {
+		return err
+	}
+
+	return runtime.ClipboardSetText(a.ctx, payload)
+}
+
+func (a *App) ExportResult(result DecodeResult, format string) (SaveFileResult, error) {
+	if a.ctx == nil {
+		return SaveFileResult{}, errors.New("application context is not ready")
+	}
+
+	resolvedFormat, err := normalizeExportFormat(format)
+	if err != nil {
+		return SaveFileResult{}, err
+	}
+
+	payload, err := buildExportPayload(result, resolvedFormat)
+	if err != nil {
+		return SaveFileResult{}, err
+	}
+
+	selectedPath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           exportDialogTitle(resolvedFormat),
+		DefaultFilename: exportFilename(resolvedFormat),
+		Filters: []runtime.FileFilter{exportFileFilter(resolvedFormat)},
+	})
+	if err != nil {
+		return SaveFileResult{}, err
+	}
+
+	if selectedPath == "" {
+		return SaveFileResult{Cancelled: true, Format: resolvedFormat}, nil
+	}
+
+	if err := os.WriteFile(selectedPath, []byte(payload), 0o600); err != nil {
+		return SaveFileResult{}, err
+	}
+
+	return SaveFileResult{Path: selectedPath, Cancelled: false, Format: resolvedFormat}, nil
+}
+
+func normalizeExportFormat(value string) (string, error) {
+	format := strings.ToLower(strings.TrimSpace(value))
+	switch format {
+	case "json", "text":
+		return format, nil
+	default:
+		return "", fmt.Errorf("unsupported export format: %s", value)
+	}
+}
+
+func buildExportPayload(result DecodeResult, format string) (string, error) {
+	resolvedFormat, err := normalizeExportFormat(format)
+	if err != nil {
+		return "", err
+	}
+
+	switch resolvedFormat {
+	case "json":
+		payload, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return "", err
+		}
+		return string(payload), nil
+	case "text":
+		return formatTextResult(result), nil
+	default:
+		return "", fmt.Errorf("unsupported export format: %s", format)
+	}
+}
+
+func formatTextResult(result DecodeResult) string {
+	var builder strings.Builder
+
+	fmt.Fprintf(&builder, "Input size: %d bytes\n", result.InputSize)
+	fmt.Fprintf(&builder, "Parts: %d\n", len(result.Parts))
+
+	if len(result.Warnings) > 0 {
+		builder.WriteString("Warnings:\n")
+		for _, warning := range result.Warnings {
+			fmt.Fprintf(&builder, "- %s\n", warning)
+		}
+	}
+
+	if result.Error != "" {
+		fmt.Fprintf(&builder, "Error: %s\n", result.Error)
+	}
+
+	if result.Leftover != "" {
+		fmt.Fprintf(&builder, "Leftover: %s\n", result.Leftover)
+	}
+
+	if len(result.Parts) > 0 {
+		builder.WriteString("Fields:\n")
+		appendTextParts(&builder, result.Parts, 0)
+	}
+
+	return strings.TrimRight(builder.String(), "\n")
+}
+
+func appendTextParts(builder *strings.Builder, parts []Part, depth int) {
+	indent := strings.Repeat("  ", depth)
+	for _, part := range parts {
+		fmt.Fprintf(builder, "%s- #%d %s wire=%d range=[%d, %d) raw=%s\n", indent, part.FieldNumber, part.TypeName, part.WireType, part.ByteRange[0], part.ByteRange[1], part.RawHex)
+		for _, variant := range part.Value {
+			fmt.Fprintf(builder, "%s  * %s: %s", indent, variant.CandidateType, variant.DisplayValue)
+			if variant.Confidence != "" {
+				fmt.Fprintf(builder, " [%s]", variant.Confidence)
+			}
+			if variant.Description != "" {
+				fmt.Fprintf(builder, " - %s", variant.Description)
+			}
+			builder.WriteString("\n")
+		}
+
+		if len(part.Children) > 0 {
+			appendTextParts(builder, part.Children, depth+1)
+		}
+	}
+}
+
+func exportDialogTitle(format string) string {
+	if format == "text" {
+		return "Export Protobuf Decode Result (Text)"
+	}
+
+	return "Export Protobuf Decode Result (JSON)"
+}
+
+func exportFilename(format string) string {
+	if format == "text" {
+		return "protobuf-decode-result.txt"
+	}
+
+	return "protobuf-decode-result.json"
+}
+
+func exportFileFilter(format string) runtime.FileFilter {
+	if format == "text" {
+		return runtime.FileFilter{DisplayName: "Text Files (*.txt)", Pattern: "*.txt"}
+	}
+
+	return runtime.FileFilter{DisplayName: "JSON Files (*.json)", Pattern: "*.json"}
 }
