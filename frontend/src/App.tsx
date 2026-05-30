@@ -1,9 +1,10 @@
 import {ChangeEvent, useState} from 'react';
 import './App.css';
-import {Decode, OpenInputFile} from '../wailsjs/go/main/App';
+import {Decode, DecodeFile, OpenInputFile} from '../wailsjs/go/main/App';
 import {main} from '../wailsjs/go/models';
 
 type DecodeRequest = main.DecodeRequest;
+type DecodeOptions = main.DecodeOptions;
 type DecodeResult = main.DecodeResult;
 type OpenFileResult = main.OpenFileResult;
 
@@ -26,6 +27,15 @@ function App() {
     const [errorMessage, setErrorMessage] = useState('');
     const [isBusy, setIsBusy] = useState(false);
 
+    function currentDecodeOptions(): DecodeOptions {
+        return {
+            parseDelimited,
+            maxDepth: defaultDecodeRequest.maxDepth,
+            maxFields: defaultDecodeRequest.maxFields,
+            maxBytes: defaultDecodeRequest.maxBytes,
+        };
+    }
+
     async function handleDecode() {
         setIsBusy(true);
         setErrorMessage('');
@@ -34,10 +44,7 @@ function App() {
             const decodeRequest: DecodeRequest = {
                 input,
                 inputEncoding,
-                parseDelimited,
-                maxDepth: defaultDecodeRequest.maxDepth,
-                maxFields: defaultDecodeRequest.maxFields,
-                maxBytes: defaultDecodeRequest.maxBytes,
+                ...currentDecodeOptions(),
             };
 
             const decodeResult = await Decode(decodeRequest);
@@ -63,9 +70,13 @@ function App() {
                 return;
             }
 
+            const decodeResult = await DecodeFile(dialogResult.path, currentDecodeOptions());
+
             setSelectedFile(dialogResult.path);
+            setResult(decodeResult);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            setResult(null);
             setErrorMessage(message);
         } finally {
             setIsBusy(false);
@@ -88,10 +99,10 @@ function App() {
     return (
         <div className="app-shell">
             <section className="hero-card">
-                <p className="eyebrow">Story 2 / API contract</p>
+                <p className="eyebrow">Story 3 / input normalization</p>
                 <h1>Protobuf Decoder Desktop</h1>
                 <p className="intro">
-                    Stable DecodeRequest and DecodeResult contract in place. Current backend still returns mock parser data.
+                    Text input now normalizes hex, base64, and auto-detected payloads. File picker now reads local binary files through `DecodeFile`.
                 </p>
             </section>
 
@@ -135,10 +146,10 @@ function App() {
 
                     <div className="action-row">
                         <button className="primary-button" onClick={handleDecode} type="button" disabled={isBusy}>
-                            {isBusy ? 'Working...' : 'Run mock decode'}
+                            {isBusy ? 'Working...' : 'Decode text input'}
                         </button>
                         <button className="secondary-button" onClick={handleOpenFile} type="button" disabled={isBusy}>
-                            Open file dialog
+                            Open and decode file
                         </button>
                     </div>
 
@@ -150,7 +161,7 @@ function App() {
 
                 <article className="panel">
                     <div className="panel-header">
-                        <h2>DecodeResult Contract</h2>
+                        <h2>Normalized DecodeResult</h2>
                     </div>
 
                     {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}

@@ -1,8 +1,10 @@
 package main
-package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -111,8 +113,8 @@ func TestDecodeReturnsStructuredContract(t *testing.T) {
 		t.Fatalf("decode returned unexpected error: %v", err)
 	}
 
-	if result.InputSize != len("0a03666f6f") {
-		t.Fatalf("expected inputSize %d, got %d", len("0a03666f6f"), result.InputSize)
+	if result.InputSize != 5 {
+		t.Fatalf("expected inputSize %d, got %d", 5, result.InputSize)
 	}
 
 	if len(result.Parts) != 1 {
@@ -127,11 +129,61 @@ func TestDecodeReturnsStructuredContract(t *testing.T) {
 		t.Fatalf("expected mock value variants, got %#v", result.Parts[0].Value)
 	}
 
-	if result.Parts[0].Value[1].DisplayValue != "10" {
-		t.Fatalf("expected 64-bit candidate to be serialized as string %q, got %q", "10", result.Parts[0].Value[1].DisplayValue)
+	if result.Parts[0].Value[1].DisplayValue != "5" {
+		t.Fatalf("expected 64-bit candidate to be serialized as string %q, got %q", "5", result.Parts[0].Value[1].DisplayValue)
 	}
 
 	if len(result.Warnings) != 3 {
 		t.Fatalf("expected warnings to describe mock contract, got %#v", result.Warnings)
+	}
+
+	if result.Parts[0].RawHex != "0a03666f6f" {
+		t.Fatalf("expected normalized rawHex %q, got %q", "0a03666f6f", result.Parts[0].RawHex)
+	}
+}
+
+func TestDecodeAutoDetectsHexInput(t *testing.T) {
+	app := NewApp()
+	result, err := app.Decode(DecodeRequest{Input: "de ad be ef", InputEncoding: "auto"})
+	if err != nil {
+		t.Fatalf("decode auto returned unexpected error: %v", err)
+	}
+
+	if result.Parts[0].RawHex != "deadbeef" {
+		t.Fatalf("expected normalized rawHex %q, got %q", "deadbeef", result.Parts[0].RawHex)
+	}
+
+	if len(result.Warnings) < 4 || !strings.Contains(strings.Join(result.Warnings, " | "), "Auto-detected input encoding: hex") {
+		t.Fatalf("expected auto-detect warning, got %#v", result.Warnings)
+	}
+}
+
+func TestDecodeFileReadsBinaryPayload(t *testing.T) {
+	app := NewApp()
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "payload.bin")
+	if err := os.WriteFile(filePath, []byte{0x0a, 0x03, 0x66, 0x6f, 0x6f}, 0o600); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	result, err := app.DecodeFile(filePath, DecodeOptions{MaxBytes: 16})
+	if err != nil {
+		t.Fatalf("decode file returned unexpected error: %v", err)
+	}
+
+	if result.InputSize != 5 {
+		t.Fatalf("expected file inputSize %d, got %d", 5, result.InputSize)
+	}
+
+	if result.Parts[0].RawHex != "0a03666f6f" {
+		t.Fatalf("expected normalized file rawHex %q, got %q", "0a03666f6f", result.Parts[0].RawHex)
+	}
+}
+
+func TestDecodeFileRejectsMissingFile(t *testing.T) {
+	app := NewApp()
+	_, err := app.DecodeFile("/tmp/does-not-exist.bin", DecodeOptions{MaxBytes: 16})
+	if err == nil {
+		t.Fatal("expected missing file error")
 	}
 }

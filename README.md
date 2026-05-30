@@ -40,9 +40,10 @@ Wails regenerates `frontend/wailsjs/` during `wails dev` and `wails build`, so g
 
 ## Current Shell Behavior
 
-- `Decode` returns fixed mock result from Go backend using current UI request values.
+- `Decode` normalizes hex, base64, or auto-detected text input before returning mock decode data.
+- `DecodeFile` reads local binary files with size checks before returning mock decode data.
 - `OpenInputFile` opens native file dialog and reports selected path or cancel state.
-- Frontend includes sample payload, encoding selector, parse-delimited toggle, and result panel.
+- Frontend includes sample payload, encoding selector, parse-delimited toggle, file decoding, and result panel.
 
 ## Next Stories
 
