@@ -10,7 +10,7 @@ import (
 const (
 	defaultMaxDepth  = 4
 	defaultMaxFields = 256
-	defaultMaxBytes  = 1024 * 1024
+	defaultMaxBytes  = 10 * 1024 * 1024
 )
 
 const (

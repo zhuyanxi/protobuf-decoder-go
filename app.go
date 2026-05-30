@@ -17,7 +17,7 @@ const (
 	defaultInputEncoding = "auto"
 	defaultMaxDepth      = 4
 	defaultMaxFields     = 256
-	defaultMaxBytes      = 1024 * 1024
+	defaultMaxBytes      = 10 * 1024 * 1024
 )
 
 type App struct {
@@ -76,6 +76,7 @@ type ValueVariant struct {
 
 type OpenFileResult struct {
 	Path      string `json:"path"`
+	Size      int64  `json:"size"`
 	Cancelled bool   `json:"cancelled"`
 }
 
@@ -243,7 +244,12 @@ func (a *App) OpenInputFile() (OpenFileResult, error) {
 		return OpenFileResult{Cancelled: true}, nil
 	}
 
-	return OpenFileResult{Path: selectedPath, Cancelled: false}, nil
+	info, err := os.Stat(selectedPath)
+	if err != nil {
+		return OpenFileResult{}, fmt.Errorf("read file %q: %w", selectedPath, err)
+	}
+
+	return OpenFileResult{Path: selectedPath, Size: info.Size(), Cancelled: false}, nil
 }
 
 func (a *App) CopyResultJSON(result DecodeResult) error {

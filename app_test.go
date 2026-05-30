@@ -208,6 +208,24 @@ func TestDecodeFileRejectsMissingFile(t *testing.T) {
 	}
 }
 
+func TestDecodeFileRejectsOversizedFile(t *testing.T) {
+	app := NewApp()
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "payload.bin")
+	if err := os.WriteFile(filePath, []byte{0x08, 0x01, 0x10, 0x02}, 0o600); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	_, err := app.DecodeFile(filePath, DecodeOptions{MaxBytes: 3})
+	if err == nil {
+		t.Fatal("expected oversized file error")
+	}
+
+	if !strings.Contains(err.Error(), "exceeds maxBytes 3") {
+		t.Fatalf("expected maxBytes guidance in file error, got %v", err)
+	}
+}
+
 func TestBuildExportPayloadJSONPrettyPrints(t *testing.T) {
 	payload, err := buildExportPayload(DecodeResult{
 		Parts: []Part{{

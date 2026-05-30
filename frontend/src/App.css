@@ -175,6 +175,30 @@
     border-style: dashed;
 }
 
+.limit-note {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border: 1px solid rgba(14, 116, 144, 0.18);
+    border-radius: 18px;
+    background: rgba(240, 249, 255, 0.88);
+}
+
+.limit-note-title,
+.limit-note-copy {
+    margin: 0;
+}
+
+.limit-note-title {
+    color: #0f766e;
+    font-weight: 700;
+}
+
+.limit-note-copy {
+    margin-top: 8px;
+    color: #475569;
+    line-height: 1.5;
+}
+
 .dropzone-title,
 .dropzone-copy {
     margin: 0;
@@ -301,6 +325,40 @@
     border-radius: 18px;
     background: #fff7ed;
     border: 1px solid #fdba74;
+}
+
+.limit-panel {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    background: rgba(240, 249, 255, 0.9);
+    border: 1px solid rgba(14, 116, 144, 0.2);
+}
+
+.limit-panel-title {
+    margin: 0;
+    color: #0f766e;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.limit-guidance-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.limit-guidance-pill {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(14, 116, 144, 0.08);
+    color: #0f766e;
+    font-size: 0.86rem;
+    font-weight: 600;
 }
 
 .warning-title {

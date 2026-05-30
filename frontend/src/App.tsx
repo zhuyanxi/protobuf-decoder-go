@@ -23,6 +23,7 @@ type PartRecord = {
 const sampleInput = '0a03666f6f';
 const defaultSelectedFile = 'No file selected';
 const idleStatus = 'Paste payload, tune limits, or drop file to start decoding.';
+const largeInputPromptBytes = 5 * 1024 * 1024;
 
 function splitHexBytes(value: string): string[] {
     const bytes: string[] = [];
@@ -138,13 +139,67 @@ function exportLabel(format: 'json' | 'text'): string {
     return format === 'text' ? 'text report' : 'JSON';
 }
 
+function formatByteSize(value: number): string {
+    if (value < 1024) {
+        return `${value} B`;
+    }
+
+    if (value < 1024 * 1024) {
+        return `${(value / 1024).toFixed(1)} KiB`;
+    }
+
+    return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+function confirmLargeInput(sourceLabel: string, size: number, maxBytesLimit: number): boolean {
+    if (size <= 0) {
+        return true;
+    }
+
+    if (size > maxBytesLimit) {
+        return window.confirm(
+            `${sourceLabel} is ${formatByteSize(size)}, above current MaxBytes ${formatByteSize(maxBytesLimit)}. Decode will fail unless you raise MaxBytes. Continue anyway?`,
+        );
+    }
+
+    if (size >= largeInputPromptBytes) {
+        return window.confirm(
+            `${sourceLabel} is ${formatByteSize(size)}. Large inputs can take longer to decode. Continue with current MaxBytes ${formatByteSize(maxBytesLimit)}?`,
+        );
+    }
+
+    return true;
+}
+
+function buildLimitGuidance(messages: string[]): string[] {
+    const guidance = new Set<string>();
+
+    messages.forEach((message) => {
+        const normalized = message.toLowerCase();
+
+        if (/max_bytes_exceeded|exceeds maxbytes/.test(normalized)) {
+            guidance.add('MaxBytes limit hit. Raise MaxBytes for trusted inputs or choose smaller payload.');
+        }
+
+        if (/max_fields_exceeded|decoded fields exceeded maxfields/.test(normalized)) {
+            guidance.add('MaxFields limit hit. Raise MaxFields only for trusted payloads that are expected to be wide.');
+        }
+
+        if (/maxdepth .* reached|nested decode skipped .* maxdepth/.test(normalized)) {
+            guidance.add('MaxDepth limit hit. Raise MaxDepth only for trusted payloads with deeper nesting.');
+        }
+    });
+
+    return Array.from(guidance);
+}
+
 const defaultDecodeRequest: DecodeRequest = {
     input: sampleInput,
     inputEncoding: 'auto',
     parseDelimited: false,
     maxDepth: 4,
     maxFields: 256,
-    maxBytes: 1024 * 1024,
+    maxBytes: 10 * 1024 * 1024,
 };
 
 function App() {
@@ -167,6 +222,11 @@ function App() {
     const selectedRecord = selectedPartPath ? partRecords.find((record) => record.path === selectedPartPath) ?? null : null;
     const rawHexBytes = result ? buildRawHexBytes(result) : [];
     const resultWarnings = result?.warnings ?? [];
+    const limitGuidance = buildLimitGuidance([
+        errorMessage,
+        result?.error ?? '',
+        ...resultWarnings,
+    ].filter((message) => message !== ''));
 
     function setDecodeResult(decodeResult: DecodeResult) {
         setResult(decodeResult);
@@ -246,6 +306,13 @@ function App() {
             if (dialogResult.cancelled) {
                 setSelectedFile('File selection cancelled');
                 setStatusMessage('File selection cancelled.');
+                return;
+            }
+
+            const maxBytesLimit = currentDecodeOptions().maxBytes;
+            if (!confirmLargeInput('Selected file', dialogResult.size, maxBytesLimit)) {
+                setSelectedFile(dialogResult.path);
+                setStatusMessage('Large file decode cancelled. Adjust MaxBytes, then retry if needed.');
                 return;
             }
 
@@ -401,6 +468,13 @@ function App() {
             return;
         }
 
+        const maxBytesLimit = currentDecodeOptions().maxBytes;
+        if (!confirmLargeInput(`Dropped file ${droppedFile.name}`, droppedFile.size, maxBytesLimit)) {
+            setSelectedFile(`${droppedFile.name} (${formatByteSize(droppedFile.size)})`);
+            setStatusMessage('Large file decode cancelled. Adjust MaxBytes, then retry if needed.');
+            return;
+        }
+
         setIsBusy(true);
         setErrorMessage('');
         setStatusMessage(`Decoding dropped file ${droppedFile.name}...`);
@@ -416,10 +490,10 @@ function App() {
             onDrop={handleDrop}
         >
             <section className="hero-card">
-                <p className="eyebrow">Story 13 / export workspace</p>
+                <p className="eyebrow">Story 14 / guarded decode workspace</p>
                 <h1>Protobuf Decoder Desktop</h1>
                 <p className="intro">
-                    Paste hex or base64, choose file, or drop file on window. Tune decode limits, inspect structured result, then copy or export analysis without leaving desktop app.
+                    Paste hex or base64, choose file, or drop file on window. Backend enforces decode limits, frontend shows loading state, and large inputs get explicit guardrails before decode starts.
                 </p>
                 <div className="hero-meta">
                     <span className="hero-chip">Local only</span>
@@ -491,7 +565,12 @@ function App() {
 
                     <div className="dropzone-card">
                         <p className="dropzone-title">Drop file to decode</p>
-                        <p className="dropzone-copy">Desktop drag-and-drop uses current options. If file path is unavailable, fall back to native picker.</p>
+                        <p className="dropzone-copy">Desktop drag-and-drop uses current options. Files above current MaxBytes fail fast in backend. Files at 5 MiB or larger ask for confirmation first.</p>
+                    </div>
+
+                    <div className="limit-note">
+                        <p className="limit-note-title">Safety limits</p>
+                        <p className="limit-note-copy">Default MaxBytes is 10 MiB. Backend enforces MaxBytes, MaxFields, and MaxDepth even if frontend inputs are edited or stale.</p>
                     </div>
 
                     <div className="action-row">
@@ -533,6 +612,16 @@ function App() {
 
                     {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
                     {!errorMessage && result?.error ? <div className="error-banner">{result.error}</div> : null}
+                    {limitGuidance.length > 0 ? (
+                        <div className="limit-panel">
+                            <p className="limit-panel-title">Limit guidance</p>
+                            <div className="limit-guidance-list">
+                                {limitGuidance.map((message) => (
+                                    <span className="limit-guidance-pill" key={message}>{message}</span>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
                     {!errorMessage && result && resultWarnings.length > 0 ? (
                         <div className="warning-panel">
                             <p className="warning-title">Warnings</p>
