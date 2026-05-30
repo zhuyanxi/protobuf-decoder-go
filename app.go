@@ -4,9 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+const (
+	defaultInputEncoding = "auto"
+	defaultMaxDepth      = 4
+	defaultMaxFields     = 256
+	defaultMaxBytes      = 1024 * 1024
 )
 
 type App struct {
@@ -25,27 +33,84 @@ type DecodeRequest struct {
 	Input          string `json:"input"`
 	InputEncoding  string `json:"inputEncoding"`
 	ParseDelimited bool   `json:"parseDelimited"`
+	MaxDepth       int    `json:"maxDepth"`
+	MaxFields      int    `json:"maxFields"`
+	MaxBytes       int    `json:"maxBytes"`
 }
 
-type DecodePart struct {
-	Index    int      `json:"index"`
-	Label    string   `json:"label"`
-	TypeName string   `json:"typeName"`
-	Raw      string   `json:"raw"`
-	Notes    []string `json:"notes"`
+type DecodeOptions struct {
+	ParseDelimited bool `json:"parseDelimited"`
+	MaxDepth       int  `json:"maxDepth"`
+	MaxFields      int  `json:"maxFields"`
+	MaxBytes       int  `json:"maxBytes"`
 }
 
 type DecodeResult struct {
-	Summary         string       `json:"summary"`
-	NormalizedInput string       `json:"normalizedInput"`
-	InputEncoding   string       `json:"inputEncoding"`
-	ParseDelimited  bool         `json:"parseDelimited"`
-	Parts           []DecodePart `json:"parts"`
+	Parts     []Part   `json:"parts"`
+	Leftover  string   `json:"leftover"`
+	Error     string   `json:"error,omitempty"`
+	Warnings  []string `json:"warnings,omitempty"`
+	InputSize int      `json:"inputSize"`
+}
+
+type Part struct {
+	ByteRange   [2]int        `json:"byteRange"`
+	Index       int           `json:"index"`
+	FieldNumber int           `json:"fieldNumber"`
+	WireType    int           `json:"wireType"`
+	TypeName    string        `json:"typeName"`
+	RawHex      string        `json:"rawHex"`
+	Value       []ValueVariant `json:"value"`
+	Children    []Part        `json:"children,omitempty"`
+}
+
+type ValueVariant struct {
+	CandidateType string `json:"candidateType"`
+	DisplayValue  string `json:"displayValue"`
+	Description   string `json:"description,omitempty"`
+	Confidence    string `json:"confidence,omitempty"`
 }
 
 type OpenFileResult struct {
 	Path      string `json:"path"`
 	Cancelled bool   `json:"cancelled"`
+}
+
+func (r DecodeRequest) Options() DecodeOptions {
+	options := DecodeOptions{
+		ParseDelimited: r.ParseDelimited,
+		MaxDepth:       r.MaxDepth,
+		MaxFields:      r.MaxFields,
+		MaxBytes:       r.MaxBytes,
+	}
+
+	if options.MaxDepth <= 0 {
+		options.MaxDepth = defaultMaxDepth
+	}
+
+	if options.MaxFields <= 0 {
+		options.MaxFields = defaultMaxFields
+	}
+
+	if options.MaxBytes <= 0 {
+		options.MaxBytes = defaultMaxBytes
+	}
+
+	return options
+}
+
+func normalizeInputEncoding(value string) (string, error) {
+	encoding := strings.TrimSpace(value)
+	if encoding == "" {
+		return defaultInputEncoding, nil
+	}
+
+	switch encoding {
+	case "auto", "hex", "base64":
+		return encoding, nil
+	default:
+		return "", fmt.Errorf("unsupported input encoding: %s", encoding)
+	}
 }
 
 func (a *App) Decode(req DecodeRequest) (DecodeResult, error) {
@@ -54,31 +119,46 @@ func (a *App) Decode(req DecodeRequest) (DecodeResult, error) {
 		return DecodeResult{}, errors.New("input is required")
 	}
 
-	encoding := strings.TrimSpace(req.InputEncoding)
-	if encoding == "" {
-		encoding = "auto"
+	encoding, err := normalizeInputEncoding(req.InputEncoding)
+	if err != nil {
+		return DecodeResult{}, err
 	}
 
-	part := DecodePart{
-		Index:    1,
-		Label:    "Mock field",
-		TypeName: "MockDecodePart",
-		Raw:      normalizedInput,
-		Notes: []string{
-			"Story 1 mock result from Go backend",
-			fmt.Sprintf("Input length: %d characters", len(normalizedInput)),
-			fmt.Sprintf("Selected encoding: %s", encoding),
+	options := req.Options()
+
+	part := Part{
+		ByteRange:   [2]int{0, len(normalizedInput)},
+		Index:       1,
+		FieldNumber: 1,
+		WireType:    2,
+		TypeName:    "MockLengthDelimited",
+		RawHex:      normalizedInput,
+		Value: []ValueVariant{
+			{
+				CandidateType: "bytes.hex",
+				DisplayValue:  normalizedInput,
+				Description:   "Mock raw payload for API contract validation.",
+				Confidence:    "mock",
+			},
+			{
+				CandidateType: "int64",
+				DisplayValue:  strconv.FormatInt(int64(len(normalizedInput)), 10),
+				Description:   "Mock 64-bit candidate encoded as string to avoid frontend precision loss.",
+				Confidence:    "low",
+			},
 		},
 	}
 
 	return DecodeResult{
-		Summary:         "Wails binding is active. Mock decode result returned from Go backend.",
-		NormalizedInput: normalizedInput,
-		InputEncoding:   encoding,
-		ParseDelimited:  req.ParseDelimited,
-		Parts:           []DecodePart{part},
+		Parts:    []Part{part},
+		Warnings: []string{
+			"Mock decode result. Story 2 validates stable API contract before real parser implementation.",
+			fmt.Sprintf("Input encoding: %s", encoding),
+			fmt.Sprintf("Options: parseDelimited=%t maxDepth=%d maxFields=%d maxBytes=%d", options.ParseDelimited, options.MaxDepth, options.MaxFields, options.MaxBytes),
+		},
+		InputSize: len(normalizedInput),
 	}, nil
-	}
+}
 
 func (a *App) OpenInputFile() (OpenFileResult, error) {
 	if a.ctx == nil {

@@ -1,34 +1,26 @@
 import {ChangeEvent, useState} from 'react';
 import './App.css';
 import {Decode, OpenInputFile} from '../wailsjs/go/main/App';
+import {main} from '../wailsjs/go/models';
 
-type DecodePart = {
-    index: number;
-    label: string;
-    typeName: string;
-    raw: string;
-    notes: string[];
-};
-
-type DecodeResult = {
-    summary: string;
-    normalizedInput: string;
-    inputEncoding: string;
-    parseDelimited: boolean;
-    parts: DecodePart[];
-};
-
-type OpenFileResult = {
-    path: string;
-    cancelled: boolean;
-};
+type DecodeRequest = main.DecodeRequest;
+type DecodeResult = main.DecodeResult;
+type OpenFileResult = main.OpenFileResult;
 
 const sampleInput = '0a03666f6f';
+const defaultDecodeRequest: DecodeRequest = {
+    input: sampleInput,
+    inputEncoding: 'auto',
+    parseDelimited: false,
+    maxDepth: 4,
+    maxFields: 256,
+    maxBytes: 1024 * 1024,
+};
 
 function App() {
-    const [input, setInput] = useState(sampleInput);
-    const [inputEncoding, setInputEncoding] = useState('auto');
-    const [parseDelimited, setParseDelimited] = useState(false);
+    const [input, setInput] = useState(defaultDecodeRequest.input);
+    const [inputEncoding, setInputEncoding] = useState(defaultDecodeRequest.inputEncoding);
+    const [parseDelimited, setParseDelimited] = useState(defaultDecodeRequest.parseDelimited);
     const [result, setResult] = useState<DecodeResult | null>(null);
     const [selectedFile, setSelectedFile] = useState('No file selected');
     const [errorMessage, setErrorMessage] = useState('');
@@ -39,13 +31,18 @@ function App() {
         setErrorMessage('');
 
         try {
-            const decodeResult = await Decode({
+            const decodeRequest: DecodeRequest = {
                 input,
                 inputEncoding,
                 parseDelimited,
-            });
+                maxDepth: defaultDecodeRequest.maxDepth,
+                maxFields: defaultDecodeRequest.maxFields,
+                maxBytes: defaultDecodeRequest.maxBytes,
+            };
 
-            setResult(decodeResult as DecodeResult);
+            const decodeResult = await Decode(decodeRequest);
+
+            setResult(decodeResult);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             setResult(null);
@@ -60,7 +57,7 @@ function App() {
         setErrorMessage('');
 
         try {
-            const dialogResult = await OpenInputFile() as OpenFileResult;
+            const dialogResult: OpenFileResult = await OpenInputFile();
             if (dialogResult.cancelled) {
                 setSelectedFile('File selection cancelled');
                 return;
@@ -80,9 +77,9 @@ function App() {
     }
 
     function handleReset() {
-        setInput(sampleInput);
-        setInputEncoding('auto');
-        setParseDelimited(false);
+        setInput(defaultDecodeRequest.input);
+        setInputEncoding(defaultDecodeRequest.inputEncoding);
+        setParseDelimited(defaultDecodeRequest.parseDelimited);
         setResult(null);
         setErrorMessage('');
         setSelectedFile('No file selected');
@@ -91,10 +88,10 @@ function App() {
     return (
         <div className="app-shell">
             <section className="hero-card">
-                <p className="eyebrow">Story 1 / Wails shell</p>
+                <p className="eyebrow">Story 2 / API contract</p>
                 <h1>Protobuf Decoder Desktop</h1>
                 <p className="intro">
-                    Minimal desktop shell for Go bindings, mock decode calls, and native file dialog verification.
+                    Stable DecodeRequest and DecodeResult contract in place. Current backend still returns mock parser data.
                 </p>
             </section>
 
@@ -153,7 +150,7 @@ function App() {
 
                 <article className="panel">
                     <div className="panel-header">
-                        <h2>Mock Result</h2>
+                        <h2>DecodeResult Contract</h2>
                     </div>
 
                     {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
