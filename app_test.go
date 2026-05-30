@@ -118,23 +118,31 @@ func TestDecodeReturnsStructuredContract(t *testing.T) {
 	}
 
 	if len(result.Parts) != 1 {
-		t.Fatalf("expected one mock part, got %d", len(result.Parts))
+		t.Fatalf("expected one decoded part, got %d", len(result.Parts))
 	}
 
 	if result.Parts[0].FieldNumber != 1 {
 		t.Fatalf("expected fieldNumber 1, got %d", result.Parts[0].FieldNumber)
 	}
 
-	if len(result.Parts[0].Value) < 2 {
-		t.Fatalf("expected mock value variants, got %#v", result.Parts[0].Value)
+	if result.Parts[0].TypeName != "LENDELIM" {
+		t.Fatalf("expected LENDELIM typeName, got %q", result.Parts[0].TypeName)
 	}
 
-	if result.Parts[0].Value[1].DisplayValue != "5" {
-		t.Fatalf("expected 64-bit candidate to be serialized as string %q, got %q", "5", result.Parts[0].Value[1].DisplayValue)
+	if len(result.Parts[0].Value) != 1 {
+		t.Fatalf("expected one raw value variant, got %#v", result.Parts[0].Value)
 	}
 
-	if len(result.Warnings) != 3 {
-		t.Fatalf("expected warnings to describe mock contract, got %#v", result.Warnings)
+	if result.Parts[0].Value[0].DisplayValue != "666f6f" {
+		t.Fatalf("expected payload raw hex %q, got %q", "666f6f", result.Parts[0].Value[0].DisplayValue)
+	}
+
+	if result.Error != "" {
+		t.Fatalf("expected empty decode error, got %q", result.Error)
+	}
+
+	if len(result.Warnings) != 2 {
+		t.Fatalf("expected two request warnings, got %#v", result.Warnings)
 	}
 
 	if result.Parts[0].RawHex != "0a03666f6f" {
@@ -144,13 +152,17 @@ func TestDecodeReturnsStructuredContract(t *testing.T) {
 
 func TestDecodeAutoDetectsHexInput(t *testing.T) {
 	app := NewApp()
-	result, err := app.Decode(DecodeRequest{Input: "de ad be ef", InputEncoding: "auto"})
+	result, err := app.Decode(DecodeRequest{Input: "08 01", InputEncoding: "auto"})
 	if err != nil {
 		t.Fatalf("decode auto returned unexpected error: %v", err)
 	}
 
-	if result.Parts[0].RawHex != "deadbeef" {
-		t.Fatalf("expected normalized rawHex %q, got %q", "deadbeef", result.Parts[0].RawHex)
+	if len(result.Parts) != 1 {
+		t.Fatalf("expected one parsed part, got %d", len(result.Parts))
+	}
+
+	if result.Parts[0].RawHex != "0801" {
+		t.Fatalf("expected normalized rawHex %q, got %q", "0801", result.Parts[0].RawHex)
 	}
 
 	if len(result.Warnings) < 4 || !strings.Contains(strings.Join(result.Warnings, " | "), "Auto-detected input encoding: hex") {

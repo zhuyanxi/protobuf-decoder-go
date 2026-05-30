@@ -1,5 +1,4 @@
 package decoder
-package decoder
 
 import (
 	"encoding/binary"

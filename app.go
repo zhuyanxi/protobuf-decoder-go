@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	decoderutil "github.com/zhuyanxi/protobuf-decoder-go/internal/decoder"
 	inpututil "github.com/zhuyanxi/protobuf-decoder-go/internal/input"
 )
 
@@ -101,39 +100,6 @@ func (r DecodeRequest) Options() DecodeOptions {
 	return options
 }
 
-func buildMockDecodeResult(data []byte, warnings []string) DecodeResult {
-	rawHex := hex.EncodeToString(data)
-
-	part := Part{
-		ByteRange:   [2]int{0, len(data)},
-		Index:       1,
-		FieldNumber: 1,
-		WireType:    2,
-		TypeName:    "MockLengthDelimited",
-		RawHex:      rawHex,
-		Value: []ValueVariant{
-			{
-				CandidateType: "bytes.hex",
-				DisplayValue:  rawHex,
-				Description:   "Normalized input bytes represented as hex.",
-				Confidence:    "mock",
-			},
-			{
-				CandidateType: "int64",
-				DisplayValue:  strconv.FormatInt(int64(len(data)), 10),
-				Description:   "Mock 64-bit candidate encoded as string to avoid frontend precision loss.",
-				Confidence:    "low",
-			},
-		},
-	}
-
-	return DecodeResult{
-		Parts:     []Part{part},
-		Warnings:  warnings,
-		InputSize: len(data),
-	}
-}
-
 func normalizeInputEncoding(value string) (string, error) {
 	encoding := strings.TrimSpace(value)
 	if encoding == "" {
@@ -145,6 +111,58 @@ func normalizeInputEncoding(value string) (string, error) {
 		return encoding, nil
 	default:
 		return "", fmt.Errorf("unsupported input encoding: %s", encoding)
+	}
+}
+
+func toDecoderOptions(options DecodeOptions) decoderutil.DecodeOptions {
+	return decoderutil.DecodeOptions{
+		ParseDelimited: options.ParseDelimited,
+		MaxDepth:       options.MaxDepth,
+		MaxFields:      options.MaxFields,
+		MaxBytes:       options.MaxBytes,
+	}
+}
+
+func fromDecoderResult(result decoderutil.DecodeResult) DecodeResult {
+	parts := make([]Part, 0, len(result.Parts))
+	for _, part := range result.Parts {
+		parts = append(parts, fromDecoderPart(part))
+	}
+
+	return DecodeResult{
+		Parts:     parts,
+		Leftover:  result.Leftover,
+		Error:     result.Error,
+		Warnings:  result.Warnings,
+		InputSize: result.InputSize,
+	}
+}
+
+func fromDecoderPart(part decoderutil.Part) Part {
+	children := make([]Part, 0, len(part.Children))
+	for _, child := range part.Children {
+		children = append(children, fromDecoderPart(child))
+	}
+
+	values := make([]ValueVariant, 0, len(part.Value))
+	for _, value := range part.Value {
+		values = append(values, ValueVariant{
+			CandidateType: value.CandidateType,
+			DisplayValue:  value.DisplayValue,
+			Description:   value.Description,
+			Confidence:    value.Confidence,
+		})
+	}
+
+	return Part{
+		ByteRange:   part.ByteRange,
+		Index:       part.Index,
+		FieldNumber: part.FieldNumber,
+		WireType:    part.WireType,
+		TypeName:    part.TypeName,
+		RawHex:      part.RawHex,
+		Value:       values,
+		Children:    children,
 	}
 }
 
@@ -164,13 +182,13 @@ func (a *App) Decode(req DecodeRequest) (DecodeResult, error) {
 		return DecodeResult{}, err
 	}
 
-	warnings := append([]string{
-		"Mock decode result. Story 3 validates normalized text input before real parser implementation.",
+	decoded := decoderutil.DecodeBytes(normalizedInput.Bytes, toDecoderOptions(options))
+	decoded.Warnings = append([]string{
 		fmt.Sprintf("Input encoding: %s", normalizedInput.Encoding),
 		fmt.Sprintf("Options: parseDelimited=%t maxDepth=%d maxFields=%d maxBytes=%d", options.ParseDelimited, options.MaxDepth, options.MaxFields, options.MaxBytes),
-	}, normalizedInput.Warnings...)
+	}, append(normalizedInput.Warnings, decoded.Warnings...)...)
 
-	return buildMockDecodeResult(normalizedInput.Bytes, warnings), nil
+	return fromDecoderResult(decoded), nil
 }
 
 func (a *App) DecodeFile(path string, options DecodeOptions) (DecodeResult, error) {
@@ -191,12 +209,14 @@ func (a *App) DecodeFile(path string, options DecodeOptions) (DecodeResult, erro
 	}
 
 	warnings := []string{
-		"Mock decode result. Story 3 validates file input before real parser implementation.",
 		fmt.Sprintf("Input source: file (%d bytes)", len(fileBytes)),
 		fmt.Sprintf("Options: parseDelimited=%t maxDepth=%d maxFields=%d maxBytes=%d", resolvedOptions.ParseDelimited, resolvedOptions.MaxDepth, resolvedOptions.MaxFields, resolvedOptions.MaxBytes),
 	}
 
-	return buildMockDecodeResult(fileBytes, warnings), nil
+	decoded := decoderutil.DecodeBytes(fileBytes, toDecoderOptions(resolvedOptions))
+	decoded.Warnings = append(warnings, decoded.Warnings...)
+
+	return fromDecoderResult(decoded), nil
 }
 
 func (a *App) OpenInputFile() (OpenFileResult, error) {
