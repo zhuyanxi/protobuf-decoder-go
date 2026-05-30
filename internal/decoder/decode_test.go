@@ -113,3 +113,74 @@ func TestDecodeBytesEnforcesMaxBytes(t *testing.T) {
 		t.Fatalf("expected leftover 0801, got %q", result.Leftover)
 	}
 }
+
+func TestDecodeBytesAddsNestedChildrenForCompleteNestedPayload(t *testing.T) {
+	data := []byte{0x0a, 0x02, 0x08, 0x01}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32, MaxDepth: 4})
+
+	if result.Error != "" {
+		t.Fatalf("expected no error, got %q", result.Error)
+	}
+
+	if len(result.Parts) != 1 {
+		t.Fatalf("expected one top-level part, got %d", len(result.Parts))
+	}
+
+	if len(result.Parts[0].Children) != 1 {
+		t.Fatalf("expected one nested child, got %#v", result.Parts[0].Children)
+	}
+
+	if result.Parts[0].Value[0].CandidateType != "nested.protobuf" {
+		t.Fatalf("expected nested.protobuf candidate first, got %#v", result.Parts[0].Value)
+	}
+
+	if result.Parts[0].Children[0].TypeName != "VARINT" || result.Parts[0].Children[0].Value[0].DisplayValue != "1" {
+		t.Fatalf("unexpected nested child %#v", result.Parts[0].Children[0])
+	}
+}
+
+func TestDecodeBytesRejectsPartialNestedCandidate(t *testing.T) {
+	data := []byte{0x0a, 0x03, 0x08, 0x01, 0xff}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32, MaxDepth: 4})
+
+	if result.Error != "" {
+		t.Fatalf("expected top-level decode success, got %q", result.Error)
+	}
+
+	if len(result.Parts) != 1 {
+		t.Fatalf("expected one top-level part, got %d", len(result.Parts))
+	}
+
+	if len(result.Parts[0].Children) != 0 {
+		t.Fatalf("expected rejected nested candidate to keep no children, got %#v", result.Parts[0].Children)
+	}
+
+	if result.Parts[0].Value[0].CandidateType == "nested.protobuf" {
+		t.Fatalf("expected no nested.protobuf candidate on partial nested parse, got %#v", result.Parts[0].Value)
+	}
+
+	if len(result.Warnings) == 0 || !strings.Contains(strings.Join(result.Warnings, " | "), "Nested protobuf candidate rejected") {
+		t.Fatalf("expected nested rejection warning, got %#v", result.Warnings)
+	}
+}
+
+func TestDecodeBytesHonorsMaxDepthForNestedPayload(t *testing.T) {
+	data := []byte{0x0a, 0x04, 0x0a, 0x02, 0x08, 0x01}
+	result := DecodeBytes(data, DecodeOptions{MaxBytes: 32, MaxDepth: 1})
+
+	if result.Error != "" {
+		t.Fatalf("expected top-level decode success, got %q", result.Error)
+	}
+
+	if len(result.Parts) != 1 || len(result.Parts[0].Children) != 1 {
+		t.Fatalf("expected one nested child at first level, got %#v", result.Parts)
+	}
+
+	if len(result.Parts[0].Children[0].Children) != 0 {
+		t.Fatalf("expected no grand-children once maxDepth hit, got %#v", result.Parts[0].Children[0].Children)
+	}
+
+	if len(result.Warnings) == 0 || !strings.Contains(strings.Join(result.Warnings, " | "), "maxDepth 1 reached") {
+		t.Fatalf("expected maxDepth warning, got %#v", result.Warnings)
+	}
+}

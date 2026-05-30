@@ -130,6 +130,20 @@ func stringVariant(payload []byte) ValueVariant {
 	}
 }
 
+func nestedMessageVariant(fieldCount int) ValueVariant {
+	displayValue := strconv.Itoa(fieldCount) + " fields"
+	if fieldCount == 1 {
+		displayValue = "1 field"
+	}
+
+	return ValueVariant{
+		CandidateType: "nested.protobuf",
+		DisplayValue:  displayValue,
+		Description:   "Payload fully parsed as nested protobuf message.",
+		Confidence:    "candidate",
+	}
+}
+
 func decodeZigZag32(value uint32) int32 {
 	return int32((value >> 1) ^ uint32(-(int32(value & 1))))
 }
