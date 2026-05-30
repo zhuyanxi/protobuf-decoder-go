@@ -1,0 +1,61 @@
+{
+  "normalized": {
+    "encoding": "hex"
+  },
+  "result": {
+    "parts": [
+      {
+        "byteRange": [
+          0,
+          2
+        ],
+        "index": 1,
+        "fieldNumber": 1,
+        "wireType": 0,
+        "typeName": "VARINT",
+        "rawHex": "0801",
+        "value": [
+          {
+            "candidateType": "uint64",
+            "displayValue": "1",
+            "description": "Unsigned protobuf varint interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int32",
+            "displayValue": "1",
+            "description": "32-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int64",
+            "displayValue": "1",
+            "description": "64-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint32",
+            "displayValue": "-1",
+            "description": "ZigZag-decoded 32-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint64",
+            "displayValue": "-1",
+            "description": "ZigZag-decoded 64-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "bool.enum_hint",
+            "displayValue": "true",
+            "description": "Schema may define this varint as bool or enum.",
+            "confidence": "hint"
+          }
+        ]
+      }
+    ],
+    "leftover": "1a03666f",
+    "error": "decoder error at offset 4 (unexpected_eof): requested 3 bytes with 2 remaining",
+    "inputSize": 6
+  }
+}

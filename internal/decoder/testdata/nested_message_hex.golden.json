@@ -1,0 +1,94 @@
+{
+  "normalized": {
+    "encoding": "hex"
+  },
+  "result": {
+    "parts": [
+      {
+        "byteRange": [
+          0,
+          4
+        ],
+        "index": 1,
+        "fieldNumber": 1,
+        "wireType": 2,
+        "typeName": "LENDELIM",
+        "rawHex": "0a020801",
+        "value": [
+          {
+            "candidateType": "nested.protobuf",
+            "displayValue": "1 field",
+            "description": "Payload fully parsed as nested protobuf message.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "string.utf8",
+            "displayValue": "\b\u0001",
+            "description": "UTF-8 string candidate.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "bytes.hex",
+            "displayValue": "0801",
+            "description": "Raw bytes rendered as hex.",
+            "confidence": "candidate"
+          }
+        ],
+        "children": [
+          {
+            "byteRange": [
+              0,
+              2
+            ],
+            "index": 1,
+            "fieldNumber": 1,
+            "wireType": 0,
+            "typeName": "VARINT",
+            "rawHex": "0801",
+            "value": [
+              {
+                "candidateType": "uint64",
+                "displayValue": "1",
+                "description": "Unsigned protobuf varint interpretation.",
+                "confidence": "candidate"
+              },
+              {
+                "candidateType": "int32",
+                "displayValue": "1",
+                "description": "32-bit two's complement interpretation.",
+                "confidence": "candidate"
+              },
+              {
+                "candidateType": "int64",
+                "displayValue": "1",
+                "description": "64-bit two's complement interpretation.",
+                "confidence": "candidate"
+              },
+              {
+                "candidateType": "sint32",
+                "displayValue": "-1",
+                "description": "ZigZag-decoded 32-bit signed interpretation.",
+                "confidence": "candidate"
+              },
+              {
+                "candidateType": "sint64",
+                "displayValue": "-1",
+                "description": "ZigZag-decoded 64-bit signed interpretation.",
+                "confidence": "candidate"
+              },
+              {
+                "candidateType": "bool.enum_hint",
+                "displayValue": "true",
+                "description": "Schema may define this varint as bool or enum.",
+                "confidence": "hint"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "leftover": "",
+    "error": "",
+    "inputSize": 4
+  }
+}

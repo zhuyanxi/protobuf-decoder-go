@@ -1,0 +1,41 @@
+{
+  "normalized": {
+    "encoding": "hex",
+    "warnings": [
+      "Auto-detected input encoding: hex",
+      "Input also matched base64. Hex chosen by heuristic."
+    ]
+  },
+  "result": {
+    "parts": [
+      {
+        "byteRange": [
+          0,
+          5
+        ],
+        "index": 1,
+        "fieldNumber": 1,
+        "wireType": 2,
+        "typeName": "LENDELIM",
+        "rawHex": "0a03666f6f",
+        "value": [
+          {
+            "candidateType": "string.utf8",
+            "displayValue": "foo",
+            "description": "UTF-8 string candidate.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "bytes.hex",
+            "displayValue": "666f6f",
+            "description": "Raw bytes rendered as hex.",
+            "confidence": "candidate"
+          }
+        ]
+      }
+    ],
+    "leftover": "",
+    "error": "",
+    "inputSize": 5
+  }
+}

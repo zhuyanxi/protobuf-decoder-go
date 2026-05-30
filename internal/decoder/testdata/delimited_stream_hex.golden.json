@@ -1,0 +1,160 @@
+{
+  "normalized": {
+    "encoding": "hex"
+  },
+  "result": {
+    "parts": [
+      {
+        "byteRange": [
+          0,
+          1
+        ],
+        "index": 1,
+        "fieldNumber": 0,
+        "wireType": -1,
+        "typeName": "MessageDelimiter",
+        "rawHex": "02",
+        "value": [
+          {
+            "candidateType": "delimited.message_index",
+            "displayValue": "1",
+            "description": "Delimited stream message index.",
+            "confidence": "confirmed"
+          },
+          {
+            "candidateType": "delimited.message_length",
+            "displayValue": "2",
+            "description": "Delimited stream message length in bytes.",
+            "confidence": "confirmed"
+          }
+        ]
+      },
+      {
+        "byteRange": [
+          1,
+          3
+        ],
+        "index": 1,
+        "fieldNumber": 1,
+        "wireType": 0,
+        "typeName": "VARINT",
+        "rawHex": "0801",
+        "value": [
+          {
+            "candidateType": "uint64",
+            "displayValue": "1",
+            "description": "Unsigned protobuf varint interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int32",
+            "displayValue": "1",
+            "description": "32-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int64",
+            "displayValue": "1",
+            "description": "64-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint32",
+            "displayValue": "-1",
+            "description": "ZigZag-decoded 32-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint64",
+            "displayValue": "-1",
+            "description": "ZigZag-decoded 64-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "bool.enum_hint",
+            "displayValue": "true",
+            "description": "Schema may define this varint as bool or enum.",
+            "confidence": "hint"
+          }
+        ]
+      },
+      {
+        "byteRange": [
+          3,
+          4
+        ],
+        "index": 2,
+        "fieldNumber": 0,
+        "wireType": -1,
+        "typeName": "MessageDelimiter",
+        "rawHex": "02",
+        "value": [
+          {
+            "candidateType": "delimited.message_index",
+            "displayValue": "2",
+            "description": "Delimited stream message index.",
+            "confidence": "confirmed"
+          },
+          {
+            "candidateType": "delimited.message_length",
+            "displayValue": "2",
+            "description": "Delimited stream message length in bytes.",
+            "confidence": "confirmed"
+          }
+        ]
+      },
+      {
+        "byteRange": [
+          4,
+          6
+        ],
+        "index": 1,
+        "fieldNumber": 2,
+        "wireType": 0,
+        "typeName": "VARINT",
+        "rawHex": "1002",
+        "value": [
+          {
+            "candidateType": "uint64",
+            "displayValue": "2",
+            "description": "Unsigned protobuf varint interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int32",
+            "displayValue": "2",
+            "description": "32-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int64",
+            "displayValue": "2",
+            "description": "64-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint32",
+            "displayValue": "1",
+            "description": "ZigZag-decoded 32-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint64",
+            "displayValue": "1",
+            "description": "ZigZag-decoded 64-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "bool.enum_hint",
+            "displayValue": "bool false if value=0, true if value=1; otherwise likely enum/int",
+            "description": "Schema may define this varint as bool or enum.",
+            "confidence": "hint"
+          }
+        ]
+      }
+    ],
+    "leftover": "",
+    "error": "",
+    "inputSize": 6
+  }
+}

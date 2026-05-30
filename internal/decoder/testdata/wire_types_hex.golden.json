@@ -1,0 +1,148 @@
+{
+  "normalized": {
+    "encoding": "hex"
+  },
+  "result": {
+    "parts": [
+      {
+        "byteRange": [
+          0,
+          3
+        ],
+        "index": 1,
+        "fieldNumber": 1,
+        "wireType": 0,
+        "typeName": "VARINT",
+        "rawHex": "089601",
+        "value": [
+          {
+            "candidateType": "uint64",
+            "displayValue": "150",
+            "description": "Unsigned protobuf varint interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int32",
+            "displayValue": "150",
+            "description": "32-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int64",
+            "displayValue": "150",
+            "description": "64-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint32",
+            "displayValue": "75",
+            "description": "ZigZag-decoded 32-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint64",
+            "displayValue": "75",
+            "description": "ZigZag-decoded 64-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "bool.enum_hint",
+            "displayValue": "bool false if value=0, true if value=1; otherwise likely enum/int",
+            "description": "Schema may define this varint as bool or enum.",
+            "confidence": "hint"
+          }
+        ]
+      },
+      {
+        "byteRange": [
+          3,
+          12
+        ],
+        "index": 2,
+        "fieldNumber": 2,
+        "wireType": 1,
+        "typeName": "FIXED64",
+        "rawHex": "110807060504030201",
+        "value": [
+          {
+            "candidateType": "uint64",
+            "displayValue": "72623859790382856",
+            "description": "Unsigned 64-bit interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int64",
+            "displayValue": "72623859790382856",
+            "description": "Signed 64-bit interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "double",
+            "displayValue": "8.20788039913184e-304",
+            "description": "IEEE-754 float64 interpretation.",
+            "confidence": "candidate"
+          }
+        ]
+      },
+      {
+        "byteRange": [
+          12,
+          17
+        ],
+        "index": 3,
+        "fieldNumber": 3,
+        "wireType": 2,
+        "typeName": "LENDELIM",
+        "rawHex": "1a03666f6f",
+        "value": [
+          {
+            "candidateType": "string.utf8",
+            "displayValue": "foo",
+            "description": "UTF-8 string candidate.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "bytes.hex",
+            "displayValue": "666f6f",
+            "description": "Raw bytes rendered as hex.",
+            "confidence": "candidate"
+          }
+        ]
+      },
+      {
+        "byteRange": [
+          17,
+          22
+        ],
+        "index": 4,
+        "fieldNumber": 4,
+        "wireType": 5,
+        "typeName": "FIXED32",
+        "rawHex": "2578563412",
+        "value": [
+          {
+            "candidateType": "uint32",
+            "displayValue": "305419896",
+            "description": "Unsigned 32-bit interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int32",
+            "displayValue": "305419896",
+            "description": "Signed 32-bit interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "float32",
+            "displayValue": "5.6904566e-28",
+            "description": "IEEE-754 float32 interpretation.",
+            "confidence": "candidate"
+          }
+        ]
+      }
+    ],
+    "leftover": "",
+    "error": "",
+    "inputSize": 22
+  }
+}

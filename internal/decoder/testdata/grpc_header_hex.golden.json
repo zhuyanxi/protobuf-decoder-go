@@ -1,0 +1,89 @@
+{
+  "normalized": {
+    "encoding": "hex"
+  },
+  "result": {
+    "parts": [
+      {
+        "byteRange": [
+          0,
+          5
+        ],
+        "index": 0,
+        "fieldNumber": 0,
+        "wireType": -1,
+        "typeName": "GRPC_HEADER",
+        "rawHex": "0000000002",
+        "value": [
+          {
+            "candidateType": "grpc.compressed",
+            "displayValue": "false",
+            "description": "gRPC frame compression flag.",
+            "confidence": "confirmed"
+          },
+          {
+            "candidateType": "grpc.message_length",
+            "displayValue": "2",
+            "description": "gRPC frame message length in bytes.",
+            "confidence": "confirmed"
+          }
+        ]
+      },
+      {
+        "byteRange": [
+          5,
+          7
+        ],
+        "index": 1,
+        "fieldNumber": 1,
+        "wireType": 0,
+        "typeName": "VARINT",
+        "rawHex": "0801",
+        "value": [
+          {
+            "candidateType": "uint64",
+            "displayValue": "1",
+            "description": "Unsigned protobuf varint interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int32",
+            "displayValue": "1",
+            "description": "32-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "int64",
+            "displayValue": "1",
+            "description": "64-bit two's complement interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint32",
+            "displayValue": "-1",
+            "description": "ZigZag-decoded 32-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "sint64",
+            "displayValue": "-1",
+            "description": "ZigZag-decoded 64-bit signed interpretation.",
+            "confidence": "candidate"
+          },
+          {
+            "candidateType": "bool.enum_hint",
+            "displayValue": "true",
+            "description": "Schema may define this varint as bool or enum.",
+            "confidence": "hint"
+          }
+        ]
+      }
+    ],
+    "leftover": "",
+    "error": "",
+    "warnings": [
+      "Detected gRPC message header: skipped 5 bytes, message length 2."
+    ],
+    "inputSize": 7
+  }
+}

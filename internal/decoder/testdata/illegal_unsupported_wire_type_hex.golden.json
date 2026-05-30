@@ -1,0 +1,11 @@
+{
+  "normalized": {
+    "encoding": "hex"
+  },
+  "result": {
+    "parts": [],
+    "leftover": "0b00",
+    "error": "decoder error at offset 0 (unsupported_wire_type): wire type 3 is unsupported",
+    "inputSize": 2
+  }
+}

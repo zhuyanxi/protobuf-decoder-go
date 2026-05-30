@@ -1,0 +1,11 @@
+{
+  "normalized": {
+    "encoding": "hex"
+  },
+  "result": {
+    "parts": [],
+    "leftover": "80",
+    "error": "decoder error at offset 1 (unexpected_eof): truncated varint",
+    "inputSize": 1
+  }
+}
