@@ -1,4 +1,4 @@
-import {ChangeEvent, DragEvent, useState} from 'react';
+import {ChangeEvent, DragEvent, KeyboardEvent, useState} from 'react';
 import './App.css';
 import {Decode, DecodeFile, OpenInputFile} from '../wailsjs/go/main/App';
 import {main} from '../wailsjs/go/models';
@@ -7,11 +7,131 @@ type DecodeRequest = main.DecodeRequest;
 type DecodeOptions = main.DecodeOptions;
 type DecodeResult = main.DecodeResult;
 type OpenFileResult = main.OpenFileResult;
+type Part = main.Part;
+type ValueVariant = main.ValueVariant;
 type DroppedFile = File & {path?: string};
+
+type PartRecord = {
+    path: string;
+    part: Part;
+    level: number;
+    globalRange: [number, number];
+    hasChildren: boolean;
+};
 
 const sampleInput = '0a03666f6f';
 const defaultSelectedFile = 'No file selected';
 const idleStatus = 'Paste payload, tune limits, or drop file to start decoding.';
+
+function splitHexBytes(value: string): string[] {
+    const bytes: string[] = [];
+    for (let index = 0; index+1 < value.length; index += 2) {
+        bytes.push(value.slice(index, index + 2));
+    }
+
+    return bytes;
+}
+
+function applyHexBytes(target: string[], start: number, hexValue: string) {
+    const bytes = splitHexBytes(hexValue);
+    for (let index = 0; index < bytes.length; index += 1) {
+        const targetIndex = start + index;
+        if (targetIndex < 0 || targetIndex >= target.length) {
+            continue;
+        }
+
+        target[targetIndex] = bytes[index];
+    }
+}
+
+function findBytesHexVariant(part: Part): string {
+    return part.value.find((variant) => variant.candidateType === 'bytes.hex')?.displayValue ?? '';
+}
+
+function resolveChildBaseOffset(part: Part, globalRange: [number, number]): number {
+    const payloadHex = findBytesHexVariant(part);
+    const payloadLength = payloadHex.length / 2;
+    return globalRange[1] - payloadLength;
+}
+
+function buildPartRecords(parts: Part[], parentBaseOffset: number | null = null, level = 0, pathPrefix = ''): PartRecord[] {
+    const records: PartRecord[] = [];
+
+    parts.forEach((part, index) => {
+        const children = part.children ?? [];
+        const path = pathPrefix === '' ? String(index) : `${pathPrefix}.${index}`;
+        const globalRange: [number, number] = parentBaseOffset === null
+            ? [part.byteRange[0], part.byteRange[1]]
+            : [parentBaseOffset + part.byteRange[0], parentBaseOffset + part.byteRange[1]];
+
+        records.push({
+            path,
+            part,
+            level,
+            globalRange,
+            hasChildren: children.length > 0,
+        });
+
+        if (children.length > 0) {
+            records.push(...buildPartRecords(children, resolveChildBaseOffset(part, globalRange), level + 1, path));
+        }
+    });
+
+    return records;
+}
+
+function buildRawHexBytes(result: DecodeResult): string[] {
+    const bytes = Array.from({length: result.inputSize}, () => '..');
+
+    result.parts.forEach((part) => {
+        applyHexBytes(bytes, part.byteRange[0], part.rawHex);
+    });
+
+    if (result.leftover !== '') {
+        const leftoverBytes = splitHexBytes(result.leftover);
+        const start = Math.max(0, result.inputSize - leftoverBytes.length);
+        applyHexBytes(bytes, start, result.leftover);
+    }
+
+    return bytes;
+}
+
+function isRecordVisible(path: string, expandedPaths: Record<string, boolean>): boolean {
+    const segments = path.split('.');
+    if (segments.length === 1) {
+        return true;
+    }
+
+    for (let index = 1; index < segments.length; index += 1) {
+        const ancestor = segments.slice(0, index).join('.');
+        if (!expandedPaths[ancestor]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function findFirstPath(parts: Part[]): string | null {
+    return parts.length > 0 ? '0' : null;
+}
+
+function summarizePart(part: Part): string {
+    if (part.value.length === 0) {
+        return 'no candidates';
+    }
+
+    const lead = part.value[0];
+    return `${lead.candidateType}: ${lead.displayValue}`;
+}
+
+function formatByteRange(range: [number, number]): string {
+    return `[${range[0]}, ${range[1]})`;
+}
+
+function formatOffset(value: number): string {
+    return value.toString(16).padStart(4, '0');
+}
 
 const defaultDecodeRequest: DecodeRequest = {
     input: sampleInput,
@@ -35,6 +155,19 @@ function App() {
     const [statusMessage, setStatusMessage] = useState(idleStatus);
     const [isBusy, setIsBusy] = useState(false);
     const [isDragActive, setIsDragActive] = useState(false);
+    const [selectedPartPath, setSelectedPartPath] = useState<string | null>(null);
+    const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
+
+    const partRecords = result ? buildPartRecords(result.parts) : [];
+    const selectedRecord = selectedPartPath ? partRecords.find((record) => record.path === selectedPartPath) ?? null : null;
+    const rawHexBytes = result ? buildRawHexBytes(result) : [];
+    const resultWarnings = result?.warnings ?? [];
+
+    function setDecodeResult(decodeResult: DecodeResult) {
+        setResult(decodeResult);
+        setSelectedPartPath(findFirstPath(decodeResult.parts));
+        setExpandedPaths({});
+    }
 
     function parseLimit(value: string, fallback: number): number {
         const parsedValue = Number.parseInt(value, 10);
@@ -57,12 +190,14 @@ function App() {
     async function decodeFileAtPath(path: string, sourceLabel: string) {
         try {
             const decodeResult = await DecodeFile(path, currentDecodeOptions());
-            setResult(decodeResult);
+            setDecodeResult(decodeResult);
             setSelectedFile(path);
             setStatusMessage(`${sourceLabel} decoded (${decodeResult.inputSize} bytes).`);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             setResult(null);
+            setSelectedPartPath(null);
+            setExpandedPaths({});
             setErrorMessage(message);
             setStatusMessage(`${sourceLabel} failed.`);
         }
@@ -82,11 +217,13 @@ function App() {
             };
 
             const decodeResult = await Decode(decodeRequest);
-            setResult(decodeResult);
+            setDecodeResult(decodeResult);
             setStatusMessage(`Decoded text input (${decodeResult.inputSize} bytes).`);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             setResult(null);
+            setSelectedPartPath(null);
+            setExpandedPaths({});
             setErrorMessage(message);
             setStatusMessage('Text decode failed.');
         } finally {
@@ -131,6 +268,8 @@ function App() {
         setMaxFields(String(defaultDecodeRequest.maxFields));
         setMaxBytes(String(defaultDecodeRequest.maxBytes));
         setResult(null);
+        setSelectedPartPath(null);
+        setExpandedPaths({});
         setErrorMessage('');
         setSelectedFile(defaultSelectedFile);
         setStatusMessage('Sample payload restored.');
@@ -144,9 +283,29 @@ function App() {
         setMaxFields(String(defaultDecodeRequest.maxFields));
         setMaxBytes(String(defaultDecodeRequest.maxBytes));
         setResult(null);
+        setSelectedPartPath(null);
+        setExpandedPaths({});
         setErrorMessage('');
         setSelectedFile(defaultSelectedFile);
         setStatusMessage('Request cleared.');
+    }
+
+    function handleRecordToggle(path: string) {
+        setExpandedPaths((currentValue) => ({
+            ...currentValue,
+            [path]: !currentValue[path],
+        }));
+    }
+
+    function handleRecordSelect(path: string) {
+        setSelectedPartPath(path);
+    }
+
+    function handleRecordKeyDown(event: KeyboardEvent<HTMLDivElement>, path: string) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleRecordSelect(path);
+        }
     }
 
     function handleDragOver(event: DragEvent<HTMLElement>) {
@@ -310,6 +469,17 @@ function App() {
                     </div>
 
                     {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
+                    {!errorMessage && result?.error ? <div className="error-banner">{result.error}</div> : null}
+                    {!errorMessage && result && resultWarnings.length > 0 ? (
+                        <div className="warning-panel">
+                            <p className="warning-title">Warnings</p>
+                            <div className="warning-list">
+                                {resultWarnings.map((warning) => (
+                                    <span className="warning-pill" key={warning}>{warning}</span>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
 
                     {isBusy ? <div className="state-card">Running decode request...</div> : null}
                     {!isBusy && !errorMessage && !result ? <div className="state-card">No result yet. Decode text input, choose file, or drop file on window.</div> : null}
@@ -318,10 +488,136 @@ function App() {
                             <div className="result-summary">
                                 <span>{result.inputSize} bytes</span>
                                 <span>{result.parts.length} parts</span>
-                                <span>{result.warnings?.length ?? 0} warnings</span>
+                                <span>{resultWarnings.length} warnings</span>
                                 <span>{result.error ? 'decoder error present' : 'decoder ok'}</span>
                             </div>
-                            <pre className="result-block">{JSON.stringify(result, null, 2)}</pre>
+
+                            <div className="result-workspace">
+                                <section className="tree-pane">
+                                    <div className="tree-table">
+                                        <div className="tree-row tree-row--header">
+                                            <span>Field</span>
+                                            <span>Wire</span>
+                                            <span>Byte range</span>
+                                            <span>Summary</span>
+                                        </div>
+
+                                        {partRecords.filter((record) => isRecordVisible(record.path, expandedPaths)).map((record) => {
+                                            const expanded = expandedPaths[record.path] ?? false;
+                                            return (
+                                                <div
+                                                    key={record.path}
+                                                    className={`tree-row${selectedPartPath === record.path ? ' tree-row--selected' : ''}`}
+                                                    onClick={() => handleRecordSelect(record.path)}
+                                                    onKeyDown={(event) => handleRecordKeyDown(event, record.path)}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                >
+                                                    <span className="tree-field-cell" style={{paddingLeft: `${record.level * 18}px`}}>
+                                                        {record.hasChildren ? (
+                                                            <button
+                                                                className="tree-toggle"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    handleRecordToggle(record.path);
+                                                                }}
+                                                                type="button"
+                                                            >
+                                                                {expanded ? '−' : '+'}
+                                                            </button>
+                                                        ) : <span className="tree-spacer" />}
+                                                        <span className="tree-field-label">#{record.part.fieldNumber} {record.part.typeName}</span>
+                                                    </span>
+                                                    <span>{record.part.wireType}</span>
+                                                    <span>{formatByteRange(record.globalRange)}</span>
+                                                    <span className="tree-summary-cell">{summarizePart(record.part)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+
+                                <section className="detail-pane">
+                                    <div className="detail-card">
+                                        <h3>Field details</h3>
+                                        {selectedRecord ? (
+                                            <>
+                                                <div className="detail-grid">
+                                                    <div>
+                                                        <span className="detail-label">Path</span>
+                                                        <span className="detail-value">{selectedRecord.path}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="detail-label">Field</span>
+                                                        <span className="detail-value">#{selectedRecord.part.fieldNumber}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="detail-label">Type</span>
+                                                        <span className="detail-value">{selectedRecord.part.typeName}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="detail-label">Byte range</span>
+                                                        <span className="detail-value">{formatByteRange(selectedRecord.globalRange)}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="raw-value-card">
+                                                    <span className="detail-label">Raw hex</span>
+                                                    <code>{selectedRecord.part.rawHex || 'n/a'}</code>
+                                                </div>
+
+                                                <div className="candidate-list">
+                                                    {selectedRecord.part.value.map((variant: ValueVariant, index: number) => (
+                                                        <div className="candidate-card" key={`${selectedRecord.path}-${variant.candidateType}-${index}`}>
+                                                            <div className="candidate-header">
+                                                                <strong>{variant.candidateType}</strong>
+                                                                <span>{variant.confidence || 'candidate'}</span>
+                                                            </div>
+                                                            <code>{variant.displayValue}</code>
+                                                            {variant.description ? <p>{variant.description}</p> : null}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="state-card">Select field row to inspect candidates, raw hex, and byte range.</div>
+                                        )}
+                                    </div>
+
+                                    <div className="detail-card">
+                                        <h3>Raw hex preview</h3>
+                                        <div className="hex-preview">
+                                            {rawHexBytes.length > 0 ? Array.from({length: Math.ceil(rawHexBytes.length / 16)}, (_, rowIndex) => {
+                                                const start = rowIndex * 16;
+                                                const slice = rawHexBytes.slice(start, start + 16);
+                                                return (
+                                                    <div className="hex-row" key={`hex-row-${start}`}>
+                                                        <span className="hex-offset">{formatOffset(start)}</span>
+                                                        <div className="hex-byte-strip">
+                                                            {slice.map((byteValue, byteIndex) => {
+                                                                const absoluteIndex = start + byteIndex;
+                                                                const isSelected = selectedRecord
+                                                                    ? absoluteIndex >= selectedRecord.globalRange[0] && absoluteIndex < selectedRecord.globalRange[1]
+                                                                    : false;
+                                                                return (
+                                                                    <span className={`hex-byte${isSelected ? ' hex-byte--selected' : ''}${byteValue === '..' ? ' hex-byte--unknown' : ''}`} key={`hex-byte-${absoluteIndex}`}>
+                                                                        {byteValue}
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }) : <div className="state-card">No raw hex preview available.</div>}
+                                        </div>
+                                    </div>
+
+                                    <div className="detail-card">
+                                        <h3>Leftover bytes</h3>
+                                        {result.leftover !== '' ? <code className="leftover-block">{result.leftover}</code> : <div className="state-card">No leftover bytes.</div>}
+                                    </div>
+                                </section>
+                            </div>
                         </>
                     ) : null}
                 </article>
