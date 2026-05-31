@@ -60,24 +60,22 @@
 - 覆盖范围：`CopyResultJSON`、`ExportResult`、`buildExportPayload` 共用空结果防御。
 - 验证：新增空结果 formatter/API 单元测试；`rtk go test ./...` 通过 59 个测试；`rtk npm --prefix frontend test` 与 `rtk npm --prefix frontend run build` 通过。
 
-### 5. `MaxFields` 语义需明确或改为全局计数
+### 5. `MaxFields` 语义需明确或改为全局计数（已修复）
 
 - 影响 Story：Story 5、Story 7、Story 14、Story 16。
 - 严重级别：Medium。
-- 证据：`internal/decoder/decode.go` 中 `decodeBytesAtDepth` 每次进入 nested message 都新建 `fieldIndex := 0`，因此 `MaxFields` 当前是单个 message 层级内限制，不是整次 decode 的全局字段总数限制。
-- 风险：用户阅读 `MaxFields = 256` 可能理解为整次 decode 最多 256 个字段；实际 nested payload 可在多个 message 层级分别达到该限制。恶意宽嵌套 payload 会增加 CPU/内存压力，虽仍受 `MaxDepth` 和 `MaxBytes` 约束。
-- 建议修复：
-  - 若产品希望全局限制：引入共享 field counter，递归和 delimited stream 共用同一计数器。
-  - 若产品接受 per-message 限制：更新 README、中文 README、troubleshooting 和 Story 文档，明确 `MaxFields` 是 per message boundary；补测试锁定语义。
+- 修复前证据：`decodeBytesAtDepth` 每次进入 nested message 都新建 `fieldIndex := 0`，因此 `MaxFields` 是单个 message 层级内限制，不是整次 decode 的全局字段总数限制。
+- 修复状态：已引入共享 decode state，顶层、nested protobuf candidate、gRPC body、delimited message payload 共用同一个 `MaxFields` 计数；`MessageDelimiter` 不计入 protobuf field budget。
+- 文档同步：README、中文 README、troubleshooting 和前端 limit guidance 已说明 `MaxFields` 是全局 decoded-field budget。
+- 验证：新增 nested + MaxFields、delimited + MaxFields 边界测试；`rtk go test ./...` 通过 61 个测试；`rtk npm --prefix frontend test` 与 `rtk npm --prefix frontend run build` 通过。
 
-### 6. 边界测试可再补两类
+### 6. 边界测试可再补一类
 
 - 影响 Story：Story 7、Story 10、Story 14。
 - 严重级别：Low。
-- 现状：核心 wire type、nested、gRPC、delimited、非法输入已有测试；本地 `rtk go test ./...` 通过 56 个测试。
+- 现状：核心 wire type、nested、gRPC、delimited、非法输入、nested MaxFields 全局计数、delimited MaxFields 全局计数已有测试；本地 `rtk go test ./...` 通过 61 个测试。
 - 建议新增：
   - Empty LENDELIM payload，例如 `1a00`，验证不触发 nested 递归，且保留 bytes/string 候选语义。
-  - Nested + MaxFields 边界，验证第 5 点确定后的 per-message 或 global 行为。
 
 ## 已确认不是问题
 
@@ -113,15 +111,15 @@ rtk wails build
 | Story 2 | 已完成 | API/JSON contract 已实现，64-bit display value 使用 string；可继续加强精度断言。 |
 | Story 3 | 已完成 | hex/base64/auto/file 输入与错误处理已有测试。 |
 | Story 4 | 已完成 | reader 边界和错误场景已有测试。 |
-| Story 5 | 需明确 | parser 主流程完成；`MaxFields` 全局/单 message 语义需定稿。 |
+| Story 5 | 已修复 | parser 主流程完成；`MaxFields` 已改为全局 decoded-field budget。 |
 | Story 6 | 已完成 | varint/fixed/string/bytes 候选解释已实现并测试。 |
-| Story 7 | 需完善 | nested parsing 已实现；建议补 empty LENDELIM 与 MaxFields 语义测试。 |
+| Story 7 | 需完善 | nested parsing 已实现；已补 nested MaxFields 全局计数测试，仍建议补 empty LENDELIM 测试。 |
 | Story 8 | 已完成 | gRPC header、截断、compressed flag 均已覆盖。 |
 | Story 9 | 已完成 | delimited stream 与错误路径已有测试。 |
 | Story 10 | 需完善 | golden tests 已覆盖主要路径；建议补新增边界 fixture。 |
 | Story 11 | 已修复 | UI 已实现；Wails generated bindings 已取消忽略，前端独立 test/build 可使用提交后的 binding 文件；App 行为测试已扩展。 |
 | Story 12 | 已完善 | 树表/详情/raw hex 已实现；新增 decode result、field detail、nested 展开回归测试。 |
 | Story 13 | 已完善 | 导出/复制已实现；新增前端 copy/export 调用测试，后端已拒绝空结果。 |
-| Story 14 | 需明确 | limit/loading/guardrail 已实现；`MaxFields` 语义需明确或改全局。 |
+| Story 14 | 已修复 | limit/loading/guardrail 已实现；`MaxFields` 已全局限制顶层、nested 和 delimited payload。 |
 | Story 15 | 需修复 | workflow 已实现；binding 缺失风险已修复，仍需处理 Go version 跟文档不一致。 |
-| Story 16 | 需同步 | 文档完整；Go version 与 `MaxFields` 语义需按最终实现同步。 |
+| Story 16 | 需同步 | 文档完整；`MaxFields` 语义已同步，仍需处理 Go version 文档差异。 |

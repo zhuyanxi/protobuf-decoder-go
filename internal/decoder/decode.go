@@ -14,12 +14,12 @@ const (
 )
 
 const (
-	ErrUnsupportedWireType ErrorKind = "unsupported_wire_type"
-	ErrInvalidFieldNumber  ErrorKind = "invalid_field_number"
-	ErrMaxFieldsExceeded   ErrorKind = "max_fields_exceeded"
-	ErrMaxBytesExceeded    ErrorKind = "max_bytes_exceeded"
-	ErrTruncatedDelimitedMessage ErrorKind = "truncated_delimited_message"
-	ErrTruncatedGRPCMessage ErrorKind = "truncated_grpc_message"
+	ErrUnsupportedWireType        ErrorKind = "unsupported_wire_type"
+	ErrInvalidFieldNumber         ErrorKind = "invalid_field_number"
+	ErrMaxFieldsExceeded          ErrorKind = "max_fields_exceeded"
+	ErrMaxBytesExceeded           ErrorKind = "max_bytes_exceeded"
+	ErrTruncatedDelimitedMessage  ErrorKind = "truncated_delimited_message"
+	ErrTruncatedGRPCMessage       ErrorKind = "truncated_grpc_message"
 	ErrUnsupportedGRPCCompression ErrorKind = "unsupported_grpc_compression"
 )
 
@@ -56,12 +56,16 @@ type ValueVariant struct {
 	Confidence    string
 }
 
-func DecodeBytes(data []byte, options DecodeOptions) DecodeResult {
-	resolved := normalizeOptions(options)
-	return decodeBytesAtDepth(data, resolved, 0, 0, true, true)
+type decodeState struct {
+	fields int
 }
 
-func decodeBytesAtDepth(data []byte, options DecodeOptions, depth int, baseOffset int, detectGRPC bool, allowDelimited bool) DecodeResult {
+func DecodeBytes(data []byte, options DecodeOptions) DecodeResult {
+	resolved := normalizeOptions(options)
+	return decodeBytesAtDepth(data, resolved, &decodeState{}, 0, 0, true, true)
+}
+
+func decodeBytesAtDepth(data []byte, options DecodeOptions, state *decodeState, depth int, baseOffset int, detectGRPC bool, allowDelimited bool) DecodeResult {
 	resolved := normalizeOptions(options)
 	result := DecodeResult{InputSize: len(data)}
 
@@ -83,7 +87,7 @@ func decodeBytesAtDepth(data []byte, options DecodeOptions, depth int, baseOffse
 			return result
 		}
 		if matched {
-			bodyResult := decodeBytesAtDepth(data[5:], resolved, depth, baseOffset+5, false, allowDelimited)
+			bodyResult := decodeBytesAtDepth(data[5:], resolved, state, depth, baseOffset+5, false, allowDelimited)
 			bodyResult.Parts = append([]Part{buildGRPCHeaderPart(header)}, bodyResult.Parts...)
 			bodyResult.InputSize = len(data)
 			bodyResult.Warnings = append([]string{fmt.Sprintf("Detected gRPC message header: skipped 5 bytes, message length %d.", header.MessageLength)}, bodyResult.Warnings...)
@@ -92,14 +96,14 @@ func decodeBytesAtDepth(data []byte, options DecodeOptions, depth int, baseOffse
 	}
 
 	if allowDelimited && resolved.ParseDelimited {
-		return decodeDelimitedStream(data, resolved, baseOffset)
+		return decodeDelimitedStream(data, resolved, state, baseOffset)
 	}
 
 	reader := NewBufferReader(data)
 	fieldIndex := 0
 
 	for reader.Remaining() > 0 {
-		if fieldIndex >= resolved.MaxFields {
+		if state.fields >= resolved.MaxFields {
 			result.Leftover = hex.EncodeToString(data[reader.Position():])
 			result.Error = (&ParseError{
 				Offset:  baseOffset + reader.Position(),
@@ -109,7 +113,7 @@ func decodeBytesAtDepth(data []byte, options DecodeOptions, depth int, baseOffse
 			return result
 		}
 
-		part, warnings, errOffset, err := decodePart(reader, fieldIndex+1, resolved, depth, baseOffset)
+		part, warnings, errOffset, err := decodePart(reader, fieldIndex+1, resolved, state, depth, baseOffset)
 		if len(warnings) > 0 {
 			result.Warnings = append(result.Warnings, warnings...)
 		}
@@ -126,7 +130,7 @@ func decodeBytesAtDepth(data []byte, options DecodeOptions, depth int, baseOffse
 	return result
 }
 
-func decodePart(reader *BufferReader, index int, options DecodeOptions, depth int, baseOffset int) (Part, []string, int, error) {
+func decodePart(reader *BufferReader, index int, options DecodeOptions, state *decodeState, depth int, baseOffset int) (Part, []string, int, error) {
 	tag, tagStart, _, err := reader.ReadVarint()
 	if err != nil {
 		return Part{}, nil, tagStart, err
@@ -141,6 +145,7 @@ func decodePart(reader *BufferReader, index int, options DecodeOptions, depth in
 			Message: fmt.Sprintf("field number %d is invalid", fieldNumber),
 		}
 	}
+	state.fields++
 
 	part := Part{
 		Index:       index,
@@ -194,8 +199,10 @@ func decodePart(reader *BufferReader, index int, options DecodeOptions, depth in
 		if len(payload) > 0 {
 			if depth >= options.MaxDepth {
 				warnings = append(warnings, fmt.Sprintf("Nested decode skipped for field %d: maxDepth %d reached.", fieldNumber, options.MaxDepth))
+			} else if state.fields >= options.MaxFields {
+				warnings = append(warnings, fmt.Sprintf("Nested decode skipped for field %d: maxFields %d reached.", fieldNumber, options.MaxFields))
 			} else {
-				nested := decodeBytesAtDepth(payload, options, depth+1, 0, false, false)
+				nested := decodeBytesAtDepth(payload, options, state, depth+1, 0, false, false)
 				if nested.Error == "" && nested.Leftover == "" && len(nested.Parts) > 0 {
 					part.Children = nested.Parts
 					part.Value = append([]ValueVariant{nestedMessageVariant(len(nested.Parts))}, part.Value...)
@@ -251,7 +258,7 @@ func nestedFailureReason(result DecodeResult) string {
 	return "payload did not fully parse as nested protobuf"
 }
 
-func decodeDelimitedStream(data []byte, options DecodeOptions, baseOffset int) DecodeResult {
+func decodeDelimitedStream(data []byte, options DecodeOptions, state *decodeState, baseOffset int) DecodeResult {
 	resolved := normalizeOptions(options)
 	result := DecodeResult{InputSize: len(data)}
 	reader := NewBufferReader(data)
@@ -306,7 +313,7 @@ func decodeDelimitedStream(data []byte, options DecodeOptions, baseOffset int) D
 			return result
 		}
 
-		messageResult := decodeBytesAtDepth(payload, messageOptions, 0, baseOffset+payloadStart, false, false)
+		messageResult := decodeBytesAtDepth(payload, messageOptions, state, 0, baseOffset+payloadStart, false, false)
 		result.Parts = append(result.Parts, messageResult.Parts...)
 		result.Warnings = append(result.Warnings, messageResult.Warnings...)
 		if messageResult.Error != "" {
@@ -325,9 +332,9 @@ func decodeDelimitedStream(data []byte, options DecodeOptions, baseOffset int) D
 }
 
 type grpcHeaderInfo struct {
-	Compressed   bool
+	Compressed    bool
 	MessageLength int
-	RawHex       string
+	RawHex        string
 }
 
 func detectGRPCHeader(data []byte) (grpcHeaderInfo, bool, error) {
@@ -343,9 +350,9 @@ func detectGRPCHeader(data []byte) (grpcHeaderInfo, bool, error) {
 	messageLength := uint64(binary.BigEndian.Uint32(data[1:5]))
 	remaining := uint64(len(data) - 5)
 	header := grpcHeaderInfo{
-		Compressed:   flag != 0,
+		Compressed:    flag != 0,
 		MessageLength: int(messageLength),
-		RawHex:       hex.EncodeToString(data[:5]),
+		RawHex:        hex.EncodeToString(data[:5]),
 	}
 
 	if messageLength > uint64(math.MaxInt) {

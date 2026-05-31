@@ -182,7 +182,7 @@ function buildLimitGuidance(messages: string[]): string[] {
         }
 
         if (/max_fields_exceeded|decoded fields exceeded maxfields/.test(normalized)) {
-            guidance.add('MaxFields limit hit. Raise MaxFields only for trusted payloads that are expected to be wide.');
+            guidance.add('MaxFields limit hit. Raise MaxFields only for trusted payloads that are expected to be wide, nested, or delimited.');
         }
 
         if (/maxdepth .* reached|nested decode skipped .* maxdepth/.test(normalized)) {

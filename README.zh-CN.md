@@ -92,7 +92,7 @@ npm --prefix frontend test
 达到限制时：
 
 - `MaxBytes`：解码器快速失败，并返回大小限制错误。
-- `MaxFields`：解码器在当前边界停止，并返回剩余字节。
+- `MaxFields`：顶层、嵌套和 delimited message 共享全局已解码字段预算；预算耗尽时解码器停止，并返回剩余字节。
 - `MaxDepth`：嵌套解码停止，父字段仍保留字节信息及其他候选解释。
 
 ## 候选解释说明

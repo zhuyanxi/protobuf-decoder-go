@@ -103,6 +103,44 @@ func TestDecodeBytesEnforcesMaxFields(t *testing.T) {
 	}
 }
 
+func TestDecodeBytesEnforcesMaxFieldsAcrossNestedMessages(t *testing.T) {
+	data := []byte{0x0a, 0x02, 0x08, 0x01, 0x10, 0x02}
+	result := DecodeBytes(data, DecodeOptions{MaxFields: 2, MaxBytes: 32, MaxDepth: 4})
+
+	if len(result.Parts) != 1 {
+		t.Fatalf("expected parent field before global max fields hit, got %#v", result.Parts)
+	}
+
+	if len(result.Parts[0].Children) != 1 {
+		t.Fatalf("expected nested child to consume shared field budget, got %#v", result.Parts[0].Children)
+	}
+
+	if !strings.Contains(result.Error, string(ErrMaxFieldsExceeded)) {
+		t.Fatalf("expected global max fields error, got %q", result.Error)
+	}
+
+	if result.Leftover != "1002" {
+		t.Fatalf("expected leftover 1002 after nested field consumed global budget, got %q", result.Leftover)
+	}
+}
+
+func TestDecodeBytesEnforcesMaxFieldsAcrossDelimitedMessages(t *testing.T) {
+	data := []byte{0x02, 0x08, 0x01, 0x02, 0x10, 0x02}
+	result := DecodeBytes(data, DecodeOptions{MaxFields: 1, MaxBytes: 32, ParseDelimited: true})
+
+	if len(result.Parts) != 3 {
+		t.Fatalf("expected first delimiter, first field, and second delimiter before global max fields hit, got %#v", result.Parts)
+	}
+
+	if !strings.Contains(result.Error, string(ErrMaxFieldsExceeded)) {
+		t.Fatalf("expected global max fields error, got %q", result.Error)
+	}
+
+	if result.Leftover != "1002" {
+		t.Fatalf("expected leftover 1002 for second message payload, got %q", result.Leftover)
+	}
+}
+
 func TestDecodeBytesEnforcesMaxBytes(t *testing.T) {
 	result := DecodeBytes([]byte{0x08, 0x01}, DecodeOptions{MaxBytes: 1})
 	if !strings.Contains(result.Error, string(ErrMaxBytesExceeded)) {

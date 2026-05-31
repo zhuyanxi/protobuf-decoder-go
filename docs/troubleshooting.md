@@ -85,6 +85,7 @@ Fix:
 Meaning:
 
 - Guardrails stopped decode to keep app responsive.
+- `MaxFields` is global across top-level, nested, and delimited messages.
 
 Fix:
 

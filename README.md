@@ -92,7 +92,7 @@ Frontend can suggest safer values and warn before large file decode, but backend
 When limits hit:
 
 - `MaxBytes`: decoder fails fast and reports size-limit error.
-- `MaxFields`: decoder stops at current boundary and returns leftover.
+- `MaxFields`: decoder stops when the global decoded-field budget is exhausted across top-level, nested, and delimited messages, then returns leftover.
 - `MaxDepth`: nested decode stops, parent field remains available with bytes and other candidates.
 
 ## Candidate interpretation guide
