@@ -1,6 +1,6 @@
 module github.com/zhuyanxi/protobuf-decoder-go
 
-go 1.26.1
+go 1.22.0
 
 require github.com/wailsapp/wails/v2 v2.10.1
 
