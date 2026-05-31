@@ -301,6 +301,41 @@ func TestBuildExportPayloadTextIncludesNestedFields(t *testing.T) {
 	}
 }
 
+func TestBuildExportPayloadRejectsEmptyResult(t *testing.T) {
+	_, err := buildExportPayload(DecodeResult{}, "json")
+	if err == nil {
+		t.Fatal("expected empty result export error")
+	}
+
+	if !strings.Contains(err.Error(), "no decode result to export") {
+		t.Fatalf("expected no result error, got %v", err)
+	}
+}
+
+func TestCopyResultJSONRejectsEmptyResult(t *testing.T) {
+	app := NewApp()
+	err := app.CopyResultJSON(DecodeResult{})
+	if err == nil {
+		t.Fatal("expected empty result copy error")
+	}
+
+	if !strings.Contains(err.Error(), "no decode result to export") {
+		t.Fatalf("expected no result error before clipboard access, got %v", err)
+	}
+}
+
+func TestExportResultRejectsEmptyResult(t *testing.T) {
+	app := NewApp()
+	_, err := app.ExportResult(DecodeResult{}, "json")
+	if err == nil {
+		t.Fatal("expected empty result export error")
+	}
+
+	if !strings.Contains(err.Error(), "no decode result to export") {
+		t.Fatalf("expected no result error before dialog access, got %v", err)
+	}
+}
+
 func TestExportResultRejectsUnsupportedFormat(t *testing.T) {
 	app := NewApp()
 	_, err := app.ExportResult(DecodeResult{}, "xml")
@@ -308,8 +343,8 @@ func TestExportResultRejectsUnsupportedFormat(t *testing.T) {
 		t.Fatal("expected unsupported export format error")
 	}
 
-	if !strings.Contains(err.Error(), "application context is not ready") {
-		t.Fatalf("expected context error before dialog when app not started, got %v", err)
+	if !strings.Contains(err.Error(), "unsupported export format") {
+		t.Fatalf("expected unsupported format error before dialog when app not started, got %v", err)
 	}
 }
 

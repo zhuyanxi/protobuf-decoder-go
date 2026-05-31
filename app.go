@@ -64,7 +64,7 @@ type Part struct {
 	TypeName    string         `json:"typeName"`
 	RawHex      string         `json:"rawHex"`
 	Value       []ValueVariant `json:"value"`
-	Children    []Part        `json:"children,omitempty"`
+	Children    []Part         `json:"children,omitempty"`
 }
 
 type ValueVariant struct {
@@ -253,6 +253,10 @@ func (a *App) OpenInputFile() (OpenFileResult, error) {
 }
 
 func (a *App) CopyResultJSON(result DecodeResult) error {
+	if !hasExportableResult(result) {
+		return errors.New("no decode result to export")
+	}
+
 	if a.ctx == nil {
 		return errors.New("application context is not ready")
 	}
@@ -266,13 +270,17 @@ func (a *App) CopyResultJSON(result DecodeResult) error {
 }
 
 func (a *App) ExportResult(result DecodeResult, format string) (SaveFileResult, error) {
-	if a.ctx == nil {
-		return SaveFileResult{}, errors.New("application context is not ready")
-	}
-
 	resolvedFormat, err := normalizeExportFormat(format)
 	if err != nil {
 		return SaveFileResult{}, err
+	}
+
+	if !hasExportableResult(result) {
+		return SaveFileResult{}, errors.New("no decode result to export")
+	}
+
+	if a.ctx == nil {
+		return SaveFileResult{}, errors.New("application context is not ready")
 	}
 
 	payload, err := buildExportPayload(result, resolvedFormat)
@@ -283,7 +291,7 @@ func (a *App) ExportResult(result DecodeResult, format string) (SaveFileResult, 
 	selectedPath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title:           exportDialogTitle(resolvedFormat),
 		DefaultFilename: exportFilename(resolvedFormat),
-		Filters: []runtime.FileFilter{exportFileFilter(resolvedFormat)},
+		Filters:         []runtime.FileFilter{exportFileFilter(resolvedFormat)},
 	})
 	if err != nil {
 		return SaveFileResult{}, err
@@ -310,10 +318,18 @@ func normalizeExportFormat(value string) (string, error) {
 	}
 }
 
+func hasExportableResult(result DecodeResult) bool {
+	return len(result.Parts) > 0 || result.Leftover != "" || result.Error != "" || len(result.Warnings) > 0 || result.InputSize > 0
+}
+
 func buildExportPayload(result DecodeResult, format string) (string, error) {
 	resolvedFormat, err := normalizeExportFormat(format)
 	if err != nil {
 		return "", err
+	}
+
+	if !hasExportableResult(result) {
+		return "", errors.New("no decode result to export")
 	}
 
 	switch resolvedFormat {

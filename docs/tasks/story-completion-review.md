@@ -51,17 +51,14 @@
 - 修复状态：已扩展为 5 个 App 行为测试，覆盖 decode 成功渲染、warnings、field detail、nested 展开、copy/export、decode error 清理旧结果、large file confirm 取消分支。
 - 验证：`rtk npm --prefix frontend test` 通过，`src/App.test.tsx` 5 个测试全部通过；`rtk npm --prefix frontend run build` 通过。
 
-### 4. `ExportResult` / `CopyResultJSON` 缺少空结果防御
+### 4. `ExportResult` / `CopyResultJSON` 缺少空结果防御（已修复）
 
 - 影响 Story：Story 13。
 - 严重级别：Medium。
-- 证据：`app.go:268` 的 `ExportResult` 和 `app.go:313` 的 `buildExportPayload` 可接受空 `DecodeResult{}` 并生成空报告；前端当前会 disabled 按钮，但后端公开 Wails API 未做同等校验。
-- 风险：前端状态异常、测试 mock、未来新入口或直接 binding 调用时，可能导出无意义结果。
-- 建议修复：
-  - 增加 `hasExportableResult(result DecodeResult) bool`。
-  - 对 `Parts`、`Error`、`Leftover`、`Warnings`、`InputSize` 全空的结果返回 `no decode result to export`。
-  - `CopyResultJSON` 与 `ExportResult` 共用校验。
-  - 添加 formatter/API 单元测试覆盖空结果拒绝。
+- 修复前证据：`ExportResult` 和 `buildExportPayload` 可接受空 `DecodeResult{}` 并生成空报告；前端当前会 disabled 按钮，但后端公开 Wails API 未做同等校验。
+- 修复状态：已增加 `hasExportableResult(result DecodeResult) bool`，对 `Parts`、`Error`、`Leftover`、`Warnings`、`InputSize` 全空的结果返回 `no decode result to export`。
+- 覆盖范围：`CopyResultJSON`、`ExportResult`、`buildExportPayload` 共用空结果防御。
+- 验证：新增空结果 formatter/API 单元测试；`rtk go test ./...` 通过 59 个测试；`rtk npm --prefix frontend test` 与 `rtk npm --prefix frontend run build` 通过。
 
 ### 5. `MaxFields` 语义需明确或改为全局计数
 
@@ -124,7 +121,7 @@ rtk wails build
 | Story 10 | 需完善 | golden tests 已覆盖主要路径；建议补新增边界 fixture。 |
 | Story 11 | 已修复 | UI 已实现；Wails generated bindings 已取消忽略，前端独立 test/build 可使用提交后的 binding 文件；App 行为测试已扩展。 |
 | Story 12 | 已完善 | 树表/详情/raw hex 已实现；新增 decode result、field detail、nested 展开回归测试。 |
-| Story 13 | 需完善 | 导出/复制已实现；新增前端 copy/export 调用测试，仍建议后端拒绝空结果。 |
+| Story 13 | 已完善 | 导出/复制已实现；新增前端 copy/export 调用测试，后端已拒绝空结果。 |
 | Story 14 | 需明确 | limit/loading/guardrail 已实现；`MaxFields` 语义需明确或改全局。 |
 | Story 15 | 需修复 | workflow 已实现；binding 缺失风险已修复，仍需处理 Go version 跟文档不一致。 |
 | Story 16 | 需同步 | 文档完整；Go version 与 `MaxFields` 语义需按最终实现同步。 |
