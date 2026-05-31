@@ -43,18 +43,13 @@
 
 ## 建议完善
 
-### 3. 前端测试覆盖过薄
+### 3. 前端测试覆盖过薄（已完善）
 
 - 影响 Story：Story 11、Story 12、Story 13、Story 14、Story 15。
 - 严重级别：Medium。
-- 证据：`frontend/src/App.test.tsx:31` 只有一个 smoke test，验证控件文案存在。
-- 风险：复杂状态逻辑缺少回归保护，包括 decode 成功/失败、nested 展开、raw hex 高亮、copy/export、large input confirm、drag/drop、limit guidance。
-- 建议补充测试：
-  - Decode 成功后显示 result summary、warnings、field row、detail candidate。
-  - Nested row 默认折叠，点击后展开 children。
-  - Export/copy 按钮无结果时 disabled，有结果时调用 Wails binding。
-  - Large text/file 超过阈值时触发 `window.confirm` 分支。
-  - Decode error 时清空旧 result 并显示 error banner。
+- 修复前证据：`frontend/src/App.test.tsx` 只有一个 smoke test，验证控件文案存在。
+- 修复状态：已扩展为 5 个 App 行为测试，覆盖 decode 成功渲染、warnings、field detail、nested 展开、copy/export、decode error 清理旧结果、large file confirm 取消分支。
+- 验证：`rtk npm --prefix frontend test` 通过，`src/App.test.tsx` 5 个测试全部通过；`rtk npm --prefix frontend run build` 通过。
 
 ### 4. `ExportResult` / `CopyResultJSON` 缺少空结果防御
 
@@ -127,9 +122,9 @@ rtk wails build
 | Story 8 | 已完成 | gRPC header、截断、compressed flag 均已覆盖。 |
 | Story 9 | 已完成 | delimited stream 与错误路径已有测试。 |
 | Story 10 | 需完善 | golden tests 已覆盖主要路径；建议补新增边界 fixture。 |
-| Story 11 | 已修复 | UI 已实现；Wails generated bindings 已取消忽略，前端独立 test/build 可使用提交后的 binding 文件。 |
-| Story 12 | 需完善 | 树表/详情/raw hex 已实现；建议补交互测试。 |
-| Story 13 | 需完善 | 导出/复制已实现；建议后端拒绝空结果。 |
+| Story 11 | 已修复 | UI 已实现；Wails generated bindings 已取消忽略，前端独立 test/build 可使用提交后的 binding 文件；App 行为测试已扩展。 |
+| Story 12 | 已完善 | 树表/详情/raw hex 已实现；新增 decode result、field detail、nested 展开回归测试。 |
+| Story 13 | 需完善 | 导出/复制已实现；新增前端 copy/export 调用测试，仍建议后端拒绝空结果。 |
 | Story 14 | 需明确 | limit/loading/guardrail 已实现；`MaxFields` 语义需明确或改全局。 |
 | Story 15 | 需修复 | workflow 已实现；binding 缺失风险已修复，仍需处理 Go version 跟文档不一致。 |
 | Story 16 | 需同步 | 文档完整；Go version 与 `MaxFields` 语义需按最终实现同步。 |
